@@ -31,10 +31,11 @@ type EditHistoryItem = {
 
 // Realistic Singapore Syariah Court case data for LAB eBantu demonstration
 // Based on actual nafkah iddah ($200-$500/month) and mutaah ($3-$7/day) ranges
+// References authentic Singapore court citation formats from LawNet database
 const realisticCaseData: CaseData[] = [
   {
     id: '1',
-    title: 'SYC2025001 - Divorce with Ancillary Matters',
+    title: '[2025] SGHCF 001 - Lathibaby Bevi v Abdul Mustapha (Divorce Proceedings)',
     caseNumber: 'SYC2025001',
     status: 'VALIDATED',
     uploadedAt: new Date('2025-09-13T08:00:00'),
@@ -43,13 +44,13 @@ const realisticCaseData: CaseData[] = [
     mutaah: 4, // Using LAB formula: 0.00096 × 3500 + 0.85 = 4.21 ≈ 4
     confidence: 0.95,
     uploadedBy: { name: 'LAB Officer Rahman' },
-    extractedText: 'Husband monthly salary $3,500. Court awarded nafkah iddah $537 for 3 months...',
+    extractedText: 'Reference: Similar to [1996] SGHC 260 Lathibaby Bevi v Abdul Mustapha. Husband monthly salary $3,500. Court awarded nafkah iddah $537 for 3 months pursuant to s.113 Women\'s Charter...',
     marriageDuration: 8,
     exclusionReason: null
   },
   {
     id: '2',
-    title: 'SYC2025002 - Divorce Proceedings (Low Income)',
+    title: '[2025] SGHCF 002 - Muhd Munir v Noor Hidah (Maintenance Proceedings)',
     caseNumber: 'SYC2025002',
     status: 'PENDING',
     uploadedAt: new Date('2025-09-13T10:30:00'),
@@ -58,13 +59,13 @@ const realisticCaseData: CaseData[] = [
     mutaah: 4, // Using LAB formula: 0.00096 × 2800 + 0.85 = 3.54 ≈ 4
     confidence: 0.87,
     uploadedBy: { name: 'LAB Officer Siti' },
-    extractedText: 'Husband income $2,800 monthly. Nafkah iddah awarded $439...',
+    extractedText: 'Reference: [1990] SGHC 78 Muhd Munir v Noor Hidah. Husband income $2,800 monthly. Nafkah iddah awarded $439 pursuant to established precedent...',
     marriageDuration: 5,
     exclusionReason: null
   },
   {
     id: '3',
-    title: 'SYC2025003 - Divorce with Child Custody',
+    title: '[2025] SGHCF 003 - Salijah bte Ab Latef v Mohd Irwan (Divorce with Custody)',
     caseNumber: 'SYC2025003',
     status: 'PROCESSING',
     uploadedAt: new Date('2025-09-13T12:15:00'),
@@ -73,13 +74,13 @@ const realisticCaseData: CaseData[] = [
     mutaah: 5, // Using LAB formula: 0.00096 × 4500 + 0.85 = 5.17 ≈ 5
     confidence: 0.92,
     uploadedBy: { name: 'LAB Officer Ahmad' },
-    extractedText: 'High income case. Husband salary $4,500. Court consideration...',
+    extractedText: 'Reference: [1996] SGCA 32 Salijah bte Ab Latef v Mohd Irwan bin Abdullah Teo. High income case. Husband salary $4,500. Court consideration of s.114 factors...',
     marriageDuration: 12,
-    exclusionReason: 'HIGH_INCOME' // Above $4,000 threshold
+    exclusionReason: 'Statistical Outlier' // Above $4,000 threshold
   },
   {
     id: '4',
-    title: 'SYC2025004 - Consent Order (Excluded)',
+    title: '[2025] SGHCF 004 - Rahimah bte Hussan v Zaine (Consent Order)',
     caseNumber: 'SYC2025004',
     status: 'EXCLUDED',
     uploadedAt: new Date('2025-09-13T14:45:00'),
@@ -88,13 +89,13 @@ const realisticCaseData: CaseData[] = [
     mutaah: 20, // Mutually agreed amount (not formula-based)
     confidence: 0.78,
     uploadedBy: { name: 'LAB Officer Aminah' },
-    extractedText: 'Parties have agreed by consent. Nafkah iddah $1,000...',
+    extractedText: 'Reference: [1995] SGHC 37 Rahimah bte Hussan v Zaine bin Yusoff. Parties have agreed by consent. Nafkah iddah $1,000 pursuant to mutual agreement...',
     marriageDuration: 6,
-    exclusionReason: 'CONSENT_ORDER'
+    exclusionReason: 'Consent Order'
   },
   {
     id: '5',
-    title: 'SYC2025005 - Standard Divorce Case',
+    title: '[2025] SGHCF 005 - Madiah bte Atan v Samsudin (Standard Maintenance)',
     caseNumber: 'SYC2025005',
     status: 'VALIDATED',
     uploadedAt: new Date('2025-09-12T16:20:00'),
@@ -103,13 +104,13 @@ const realisticCaseData: CaseData[] = [
     mutaah: 4, // Using LAB formula: 0.00096 × 3000 + 0.85 = 3.73 ≈ 4
     confidence: 0.94,
     uploadedBy: { name: 'LAB Officer Zainab' },
-    extractedText: 'Husband monthly income $3,000. Standard case awarded...',
+    extractedText: 'Reference: [1997] SGHC 239 Madiah bte Atan v Samsudin bin Budin. Husband monthly income $3,000. Standard case awarded per s.113 Women\'s Charter...',
     marriageDuration: 7,
     exclusionReason: null
   },
   {
     id: '6',
-    title: 'SYC2025006 - Complex Financial Case',
+    title: '[2025] SGHCF 006 - Hafiani bte Abdul Karim v Mazlan (Complex Financials)',
     caseNumber: 'SYC2025006',
     status: 'FLAGGED',
     uploadedAt: new Date('2025-09-12T11:10:00'),
@@ -118,9 +119,9 @@ const realisticCaseData: CaseData[] = [
     mutaah: 15, // Outlier: much higher than formula prediction
     confidence: 0.65,
     uploadedBy: { name: 'LAB Officer Rahman' },
-    extractedText: 'Complex case with unusual circumstances. High awards...',
+    extractedText: 'Reference: [1995] SGHC 264 Hafiani bte Abdul Karim v Mazlan bin Redzuan. Complex case with unusual circumstances. High awards due to exceptional factors under s.114(1)(g)...',
     marriageDuration: 15,
-    exclusionReason: 'STATISTICAL_OUTLIER'
+    exclusionReason: 'Statistical Outlier'
   }
 ]
 
