@@ -1,0 +1,143 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  role          UserRole  @default(LAB_OFFICER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  uploadedCases Case[]
+  validations   CaseValidation[]
+  
+  @@map("users")
+}
+
+model Case {
+  id              String     @id @default(cuid())
+  title           String
+  caseNumber      String?    @unique
+  fileUrl         String     // Vercel Blob storage URL
+  fileName        String
+  fileSize        Int
+  uploadedAt      DateTime   @default(now())
+  processedAt     DateTime?
+  status          CaseStatus @default(UPLOADED)
+  
+  // Extracted data
+  husbandIncome   Float?     // Monthly income in SGD
+  nafkahIddah     Float?     // Monthly nafkah iddah amount
+  mutaah          Float?     // Daily mutaah amount
+  marriageDuration Int?      // Duration in months
+  extractedText   String?    // Full extracted text
+  
+  // AI Processing
+  aiExtraction    Json?      // Raw AI extraction results
+  confidence      Float?     // AI confidence score (0-1)
+  
+  // Filtering flags
+  isConsentOrder  Boolean    @default(false)
+  isHighIncome    Boolean    @default(false)
+  isOutlier       Boolean    @default(false)
+  isExcluded      Boolean    @default(false)
+  exclusionReason String?
+  
+  // Relations
+  uploadedBy      User       @relation(fields: [uploadedById], references: [id])
+  uploadedById    String
+  validations     CaseValidation[]
+  
+  @@map("cases")
+}
+
+model CaseValidation {
+  id          String           @id @default(cuid())
+  action      ValidationAction
+  comment     String?
+  validatedAt DateTime         @default(now())
+  
+  // Original vs corrected values
+  originalData Json?
+  correctedData Json?
+  
+  // Relations
+  case        Case             @relation(fields: [caseId], references: [id])
+  caseId      String
+  validator   User             @relation(fields: [validatorId], references: [id])
+  validatorId String
+  
+  @@map("case_validations")
+}
+
+model Formula {
+  id          String        @id @default(cuid())
+  version     String        @unique
+  type        FormulaType
+  formula     String        // Mathematical formula as string
+  parameters  Json          // Formula parameters
+  description String?
+  isActive    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  
+  // Statistics
+  basedOnCases Int          // Number of cases used for calculation
+  rSquared     Float?       // R-squared value for regression
+  confidence   Float?       // Statistical confidence level
+  
+  @@map("formulas")
+}
+
+model AuditLog {
+  id        String    @id @default(cuid())
+  action    String
+  entity    String    // Table name
+  entityId  String    // Record ID
+  oldData   Json?
+  newData   Json?
+  userId    String?
+  timestamp DateTime  @default(now())
+  
+  @@map("audit_logs")
+}
+
+enum UserRole {
+  LAB_OFFICER
+  ADMIN
+  VALIDATOR
+}
+
+enum CaseStatus {
+  UPLOADED
+  PROCESSING
+  EXTRACTED
+  VALIDATED
+  APPROVED
+  REJECTED
+  EXCLUDED
+}
+
+enum ValidationAction {
+  APPROVE
+  REJECT
+  CORRECT
+  EXCLUDE
+  FLAG_OUTLIER
+}
+
+enum FormulaType {
+  NAFKAH_IDDAH
+  MUTAAH
+}
