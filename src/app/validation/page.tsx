@@ -66,6 +66,8 @@ export default function ValidationPage() {
     }
 
     // In production, this would be an API call to save validation
+    console.log('Validation result:', validationResult)
+    
     // For now, simulate success and move to next case
     if (currentCaseIndex < mockValidationQueue.length - 1) {
       setCurrentCaseIndex(currentCaseIndex + 1)

@@ -65,6 +65,9 @@ export async function extractTextFromPDF(buffer: ArrayBuffer): Promise<string> {
   try {
     // PDF processing would go here - using pdfjs-dist or similar
     // For hackathon demo, return structured placeholder
+    // TODO: In production, process the actual buffer with PDF library
+    console.log('PDF buffer size:', buffer.byteLength)
+    
     return `
       SYARIAH COURT CASE EXTRACT
       Case No: SYC2024001
