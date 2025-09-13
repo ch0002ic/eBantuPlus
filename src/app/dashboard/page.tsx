@@ -1,6 +1,126 @@
+'use client'
+
 import Link from 'next/link'
+import { useState, useEffect } from 'react'
+
+// Enhanced case data with more realistic information
+const enhancedCaseData = [
+  {
+    id: 'SYC2025001',
+    title: '[2025] SGHCF 001 - Lathibaby Bevi v Abdul Mustapha',
+    caseNumber: 'SYC2025001',
+    status: 'validated' as const,
+    uploadedAt: '2 hours ago',
+    uploadedBy: 'LAB Officer Rahman',
+    extractedData: {
+      husbandIncome: 3500,
+      nafkahIddah: 537,
+      mutaah: 4,
+      marriageDuration: 8,
+      confidence: 0.95
+    },
+    extractedText: 'Reference: Similar to [1996] SGHC 260 Lathibaby Bevi v Abdul Mustapha. Husband monthly salary $3,500. Court awarded nafkah iddah $537 for 3 months pursuant to s.113 Women\'s Charter...',
+    originalDocument: 'SYC2025001_judgment.pdf'
+  },
+  {
+    id: 'SYC2025002',
+    title: '[2025] SGHCF 002 - Muhd Munir v Noor Hidah',
+    caseNumber: 'SYC2025002',
+    status: 'pending' as const,
+    uploadedAt: '4 hours ago',
+    uploadedBy: 'LAB Officer Siti',
+    extractedData: {
+      husbandIncome: 4200,
+      nafkahIddah: 635,
+      mutaah: 4,
+      marriageDuration: 10,
+      confidence: 0.87
+    },
+    extractedText: 'Reference: [1990] SGHC 78 Muhd Munir v Noor Hidah. Husband income $4,200 monthly. Nafkah iddah awarded $635 pursuant to established precedent...',
+    originalDocument: 'SYC2025002_judgment.pdf'
+  },
+  {
+    id: 'SYC2025003',
+    title: '[2025] SGHCF 003 - Salijah bte Ab Latef v Mohd Irwan',
+    caseNumber: 'SYC2025003',
+    status: 'processing' as const,
+    uploadedAt: '6 hours ago',
+    uploadedBy: 'LAB Officer Ahmad',
+    extractedData: {
+      husbandIncome: 2800,
+      nafkahIddah: 439,
+      mutaah: 4,
+      marriageDuration: 5,
+      confidence: 0.91
+    },
+    extractedText: 'Reference: [1996] SGCA 32 Salijah bte Ab Latef v Mohd Irwan bin Abdullah Teo. Husband salary $2,800. Court consideration of s.114 factors...',
+    originalDocument: 'SYC2025003_judgment.pdf'
+  }
+]
+
+type CaseData = typeof enhancedCaseData[0]
 
 export default function Dashboard() {
+  const [cases, setCases] = useState(enhancedCaseData)
+  const [selectedCase, setSelectedCase] = useState<CaseData | null>(null)
+  const [viewMode, setViewMode] = useState<'list' | 'detail' | 'edit' | 'view'>('list')
+  const [editFormData, setEditFormData] = useState<Partial<CaseData['extractedData']>>({})
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [actionFeedback, setActionFeedback] = useState<{type: 'success' | 'error', message: string} | null>(null)
+
+  const handleViewCase = (caseData: CaseData) => {
+    setSelectedCase(caseData)
+    setViewMode('detail')
+  }
+
+  const handleEditCase = (caseData: CaseData) => {
+    setSelectedCase(caseData)
+    setEditFormData(caseData.extractedData)
+    setViewMode('edit')
+  }
+
+  const handleValidateCase = (caseId: string, action: 'approve' | 'reject') => {
+    setCases(prev => prev.map(c => 
+      c.id === caseId 
+        ? { ...c, status: action === 'approve' ? 'validated' as const : 'pending' as const }
+        : c
+    ))
+    
+    setActionFeedback({
+      type: 'success',
+      message: `Case ${caseId} ${action === 'approve' ? 'approved' : 'rejected'} successfully`
+    })
+    
+    setTimeout(() => setActionFeedback(null), 3000)
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleSaveEdit = () => {
+    if (!selectedCase) return
+    
+    setCases(prev => prev.map(c => 
+      c.id === selectedCase.id 
+        ? { ...c, extractedData: { ...c.extractedData, ...editFormData } }
+        : c
+    ))
+    
+    setActionFeedback({
+      type: 'success',
+      message: `Case ${selectedCase.id} updated successfully`
+    })
+    
+    setViewMode('list')
+    setSelectedCase(null)
+    setTimeout(() => setActionFeedback(null), 3000)
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleCancelEdit = () => {
+    setViewMode('list')
+    setSelectedCase(null)
+    setEditFormData({})
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Navigation */}
@@ -88,36 +208,15 @@ export default function Dashboard() {
             <h2 className="text-lg font-semibold text-gray-900">Recent Cases</h2>
           </div>
           <div className="divide-y divide-gray-200">
-            <CaseRow
-              title="SYC2025001 - Divorce Proceeding"
-              status="validated"
-              uploadedAt="2 hours ago"
-              extractedData={{
-                income: 3500,
-                nafkahIddah: 800,
-                mutaah: 15
-              }}
-            />
-            <CaseRow
-              title="SYC2025002 - Maintenance Application"
-              status="pending"
-              uploadedAt="4 hours ago"
-              extractedData={{
-                income: 4200,
-                nafkahIddah: 900,
-                mutaah: 18
-              }}
-            />
-            <CaseRow
-              title="SYC2025003 - Financial Relief"
-              status="processing"
-              uploadedAt="6 hours ago"
-              extractedData={{
-                income: 2800,
-                nafkahIddah: 650,
-                mutaah: 12
-              }}
-            />
+            {cases.slice(0, 3).map((caseData: CaseData) => (
+              <CaseRow
+                key={caseData.id}
+                caseData={caseData}
+                onView={handleViewCase}
+                onEdit={handleEditCase}
+                onValidate={(id: string) => handleValidateCase(id, 'approve')}
+              />
+            ))}
           </div>
           <div className="px-6 py-3 bg-gray-50 text-center">
             <Link href="/cases" className="text-blue-600 hover:text-blue-700 font-medium">
@@ -126,6 +225,32 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Modals */}
+      <CaseDetailView
+        caseData={selectedCase || cases[0]}
+        isOpen={viewMode === 'view' && selectedCase !== null}
+        onClose={() => {
+          setViewMode('list')
+          setSelectedCase(null)
+        }}
+      />
+
+      <CaseEditView
+        caseData={selectedCase || cases[0]}
+        isOpen={viewMode === 'edit' && selectedCase !== null}
+        onClose={() => {
+          setViewMode('list')
+          setSelectedCase(null)
+        }}
+        onSave={(updatedCase: CaseData) => {
+          setCases(prev => prev.map(c => c.id === updatedCase.id ? updatedCase : c))
+          setViewMode('list')
+          setSelectedCase(null)
+          setActionFeedback({ type: 'success', message: 'Case updated successfully' })
+          setTimeout(() => setActionFeedback(null), 3000)
+        }}
+      />
     </div>
   )
 }
@@ -180,17 +305,13 @@ function QuickActionCard({ title, description, icon, href, bgColor }: QuickActio
 }
 
 interface CaseRowProps {
-  title: string
-  status: 'validated' | 'pending' | 'processing'
-  uploadedAt: string
-  extractedData: {
-    income: number
-    nafkahIddah: number
-    mutaah: number
-  }
+  caseData: CaseData
+  onView: (caseData: CaseData) => void
+  onEdit: (caseData: CaseData) => void
+  onValidate: (id: string) => void
 }
 
-function CaseRow({ title, status, uploadedAt, extractedData }: CaseRowProps) {
+function CaseRow({ caseData, onView, onEdit, onValidate }: CaseRowProps) {
   const statusColors = {
     validated: 'bg-green-100 text-green-800',
     pending: 'bg-yellow-100 text-yellow-800',
@@ -198,22 +319,287 @@ function CaseRow({ title, status, uploadedAt, extractedData }: CaseRowProps) {
   }
 
   return (
-    <div className="px-6 py-4 hover:bg-gray-50">
+    <div className="px-6 py-4 hover:bg-gray-50 border-b border-gray-100">
       <div className="flex items-center justify-between">
         <div className="flex-1">
-          <h4 className="text-sm font-medium text-gray-900">{title}</h4>
+          <div className="flex items-center gap-3">
+            <h4 className="text-sm font-medium text-gray-900">{caseData.title}</h4>
+            <div className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[caseData.status]}`}>
+              {caseData.status.charAt(0).toUpperCase() + caseData.status.slice(1)}
+            </div>
+          </div>
           <div className="flex items-center mt-1 text-sm text-gray-500">
-            <span>{uploadedAt}</span>
+            <span>{caseData.uploadedAt}</span>
             <span className="mx-2">•</span>
-            <span>Income: ${extractedData.income}</span>
+            <span>Income: ${caseData.extractedData.husbandIncome}</span>
             <span className="mx-2">•</span>
-            <span>Nafkah: ${extractedData.nafkahIddah}</span>
+            <span>Nafkah: ${caseData.extractedData.nafkahIddah}</span>
             <span className="mx-2">•</span>
-            <span>Mutaah: ${extractedData.mutaah}</span>
+            <span>Mutaah: ${caseData.extractedData.mutaah}</span>
+          </div>
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+          {(caseData as any).courtReference && (
+            <div className="mt-1 text-xs text-blue-600">
+              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+              {(caseData as any).courtReference}
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-2 ml-4">
+          <button
+            onClick={() => onView(caseData)}
+            className="px-3 py-1 text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
+          >
+            View
+          </button>
+          <button
+            onClick={() => onEdit(caseData)}
+            className="px-3 py-1 text-xs font-medium text-gray-600 hover:text-gray-700 hover:bg-gray-50 rounded-md transition-colors"
+          >
+            Edit
+          </button>
+          {caseData.status === 'pending' && (
+            <button
+              onClick={() => onValidate(caseData.id)}
+              className="px-3 py-1 text-xs font-medium text-green-600 hover:text-green-700 hover:bg-green-50 rounded-md transition-colors"
+            >
+              Validate
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Modal Components
+interface CaseDetailViewProps {
+  caseData: CaseData
+  isOpen: boolean
+  onClose: () => void
+}
+
+function CaseDetailView({ caseData, isOpen, onClose }: CaseDetailViewProps) {
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-900">Case Details</h3>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        
+        <div className="p-6 space-y-6">
+          <div>
+            <h4 className="text-sm font-medium text-gray-900 mb-3">Case Information</h4>
+            <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">Title:</span>
+                <span className="text-sm font-medium text-gray-900">{caseData.title}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">Case Number:</span>
+                <span className="text-sm font-medium text-gray-900">{caseData.caseNumber}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">Status:</span>
+                <span className="text-sm font-medium text-gray-900 capitalize">{caseData.status}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">Uploaded:</span>
+                <span className="text-sm font-medium text-gray-900">{caseData.uploadedAt}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">Uploaded By:</span>
+                <span className="text-sm font-medium text-gray-900">{caseData.uploadedBy}</span>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <h4 className="text-sm font-medium text-gray-900 mb-3">Extracted Financial Data</h4>
+            <div className="bg-blue-50 rounded-lg p-4 space-y-3">
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">Husband Income:</span>
+                <span className="text-sm font-medium text-gray-900">${caseData.extractedData.husbandIncome}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">Nafkah Iddah:</span>
+                <span className="text-sm font-medium text-gray-900">${caseData.extractedData.nafkahIddah}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">Mutaah:</span>
+                <span className="text-sm font-medium text-gray-900">${caseData.extractedData.mutaah}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">Marriage Duration:</span>
+                <span className="text-sm font-medium text-gray-900">{caseData.extractedData.marriageDuration} years</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">Confidence:</span>
+                <span className="text-sm font-medium text-gray-900">{(caseData.extractedData.confidence * 100).toFixed(1)}%</span>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <h4 className="text-sm font-medium text-gray-900 mb-3">Extracted Text Preview</h4>
+            <div className="bg-gray-50 rounded-lg p-4">
+              <p className="text-sm text-gray-700 line-clamp-4">
+                {caseData.extractedText.substring(0, 300)}...
+              </p>
+            </div>
           </div>
         </div>
-        <div className={`px-3 py-1 rounded-full text-xs font-medium ${statusColors[status]}`}>
-          {status.charAt(0).toUpperCase() + status.slice(1)}
+
+        <div className="flex justify-end gap-3 p-6 border-t border-gray-200">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+interface CaseEditViewProps {
+  caseData: CaseData
+  isOpen: boolean
+  onClose: () => void
+  onSave: (updatedData: CaseData) => void
+}
+
+function CaseEditView({ caseData, isOpen, onClose, onSave }: CaseEditViewProps) {
+  const [editedData, setEditedData] = useState<CaseData>(caseData)
+
+  useEffect(() => {
+    setEditedData(caseData)
+  }, [caseData])
+
+  if (!isOpen) return null
+
+  const handleSave = () => {
+    onSave(editedData)
+    onClose()
+  }
+
+  const updateExtractedData = (field: string, value: number) => {
+    setEditedData(prev => ({
+      ...prev,
+      extractedData: {
+        ...prev.extractedData,
+        [field]: value
+      }
+    }))
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-900">Edit Case</h3>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        
+        <div className="p-6 space-y-6">
+          <div>
+            <h4 className="text-sm font-medium text-gray-900 mb-3">Case Information</h4>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                <input
+                  type="text"
+                  value={editedData.title}
+                  onChange={(e) => setEditedData(prev => ({ ...prev, title: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Case Number</label>
+                <input
+                  type="text"
+                  value={editedData.caseNumber}
+                  onChange={(e) => setEditedData(prev => ({ ...prev, caseNumber: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <h4 className="text-sm font-medium text-gray-900 mb-3">Financial Data</h4>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Husband Income ($)</label>
+                <input
+                  type="number"
+                  value={editedData.extractedData.husbandIncome}
+                  onChange={(e) => updateExtractedData('husbandIncome', parseFloat(e.target.value) || 0)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nafkah Iddah ($)</label>
+                <input
+                  type="number"
+                  value={editedData.extractedData.nafkahIddah}
+                  onChange={(e) => updateExtractedData('nafkahIddah', parseFloat(e.target.value) || 0)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Mutaah ($)</label>
+                <input
+                  type="number"
+                  value={editedData.extractedData.mutaah}
+                  onChange={(e) => updateExtractedData('mutaah', parseFloat(e.target.value) || 0)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Marriage Duration (years)</label>
+                <input
+                  type="number"
+                  value={editedData.extractedData.marriageDuration}
+                  onChange={(e) => updateExtractedData('marriageDuration', parseFloat(e.target.value) || 0)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-3 p-6 border-t border-gray-200">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
+          >
+            Save Changes
+          </button>
         </div>
       </div>
     </div>
