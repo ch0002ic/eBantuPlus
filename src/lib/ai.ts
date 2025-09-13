@@ -91,8 +91,8 @@ CRITICAL INSTRUCTIONS:
       const result = JSON.parse(content) as AIExtractionResult
       return result
     } catch (error) {
-      // If JSON parsing fails, return a basic result
-      console.warn('Failed to parse AI response:', error)
+            // If JSON parsing fails, return structured error response
+      console.error('Failed to parse AI response as JSON:', error)
       return {
         husbandIncome: null,
         nafkahIddah: null,

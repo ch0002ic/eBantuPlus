@@ -1,26 +1,30 @@
 /**
  * LAB Formula Engine for eBantu+ Syariah Court Case Analysis
  * SMU LIT Hackathon 2025 - Team HashBill
- * Implements the exact LAB eBantu formulas for nafkah iddah and mutaah calculations
+ * Implements the EXACT LAB eBantu formulas as specified in requirements
  */
 
 export interface LABFormulaInputs {
   salary: number
-  dependents?: number
-  location?: 'singapore' | 'regional'
   caseType: 'nafkah_iddah' | 'mutaah' | 'both'
-  circumstancialFactors?: {
-    hasSpecialNeeds?: boolean
-    hasChildrenUnder21?: boolean
-    economicHardship?: boolean
-    exceptionalCircumstances?: boolean
-    reducedCircumstances?: boolean
-  }
+  includeRanges?: boolean
 }
 
 export interface LABFormulaResult {
-  nafkahIddah?: number
-  mutaah?: number
+  nafkahIddah?: {
+    amount: number
+    lowerRange: number
+    upperRange: number
+    isOutOfScope: boolean
+    reasoning: string[]
+  }
+  mutaah?: {
+    amount: number
+    lowerRange: number
+    upperRange: number
+    isOutOfScope: boolean
+    reasoning: string[]
+  }
   details: {
     salary: number
     appliedCoefficients: {
@@ -31,272 +35,277 @@ export interface LABFormulaResult {
     }
     calculationMethod: string
     confidence: number
-    reasoning: string[]
-    ranges?: {
-      nafkahIddahRange?: { min: number; max: number }
-      mutaahRange?: { min: number; max: number }
-    }
-    appliedRounding: {
-      nafkahIddahOriginal?: number
-      nafkahIddahRounded?: number
-      mutaahOriginal?: number
-      mutaahRounded?: number
-    }
-    thresholds: {
-      salaryThreshold: number
-      minimumAmounts: {
-        nafkahIddah: number
-        mutaah: number
-      }
-    }
+    overallReasoning: string[]
   }
 }
 
 /**
  * Official LAB eBantu Formula Implementation
- * Based on Singapore Legal Aid Bureau specifications
  * 
- * Nafkah Iddah: Amount per month = 0.14 × salary + 47
- * - Upper range: +20% for exceptional circumstances
- * - Lower range: -15% for reduced circumstances
- * - Minimum threshold: $50/month
- * - Rounding: to nearest $5
+ * EXACT SPECIFICATION IMPLEMENTATION:
  * 
- * Mutaah: Amount = 0.00096 × salary + 0.85
- * - Upper range: +25% for exceptional circumstances  
- * - Lower range: -20% for reduced circumstances
- * - Minimum threshold: $100
- * - Rounding: to nearest $10
+ * Nafkah Iddah (Wife Maintenance, Per Month):
+ * - Primary formula: Amount per month = 0.14 × salary + 47
+ * - Lower range: 0.14 × salary – 3 (rounded to nearest hundred; lower bound not less than 0)
+ * - Upper range: 0.14 × salary + 197 (rounded to nearest hundred)
  * 
- * Salary Threshold: $4,000 - special handling for high earners
- * Zero Handling: Return 0 for zero salary with appropriate reasoning
+ * Mutaah (Consolatory Gift, Per Day):
+ * - Primary formula: Amount per day = 0.00096 × salary + 0.85 (rounded to nearest integer)
+ * - Lower range: 0.00096 × salary – 0.15 (rounded to nearest integer)
+ * - Upper range: 0.00096 × salary + 1.85 (rounded to nearest integer)
+ * 
+ * Key Business Rules:
+ * - If salary = 0, Iddah amount = 0, Mutaah amount = 0
+ * - If formula output < 0, amount = 0
+ * - If lower range < 0, set it to 0
+ * - If salary > $4,000, do not calculate—refer to legal advice ("out of scope" for LAB)
  */
 export class LABFormulaEngine {
-  // Official LAB coefficients (exact as per specification)
+  // Official LAB coefficients (EXACT as per specification)
   private static readonly NAFKAH_IDDAH_MULTIPLIER = 0.14
   private static readonly NAFKAH_IDDAH_CONSTANT = 47
+  private static readonly NAFKAH_IDDAH_LOWER_OFFSET = -3
+  private static readonly NAFKAH_IDDAH_UPPER_OFFSET = 197
+  
   private static readonly MUTAAH_MULTIPLIER = 0.00096
   private static readonly MUTAAH_CONSTANT = 0.85
+  private static readonly MUTAAH_LOWER_OFFSET = -0.15
+  private static readonly MUTAAH_UPPER_OFFSET = 1.85
 
-  // Range adjustments (as per LAB guidelines)
-  private static readonly NAFKAH_IDDAH_UPPER_ADJUSTMENT = 0.20 // +20%
-  private static readonly NAFKAH_IDDAH_LOWER_ADJUSTMENT = 0.15 // -15%
-  private static readonly MUTAAH_UPPER_ADJUSTMENT = 0.25 // +25%
-  private static readonly MUTAAH_LOWER_ADJUSTMENT = 0.20 // -20%
-
-  // Thresholds and limits
-  private static readonly SALARY_THRESHOLD = 4000 // Special handling above $4,000
-  private static readonly NAFKAH_IDDAH_MIN = 50 // Minimum $50/month
-  private static readonly MUTAAH_MIN = 100 // Minimum $100
+  // Business rules thresholds
+  private static readonly SALARY_THRESHOLD = 4000 // Above this, refer to legal advice
   private static readonly MIN_SALARY = 0
-  private static readonly MAX_SALARY = 50000 // Singapore context
 
-  // Rounding rules
-  private static readonly NAFKAH_IDDAH_ROUNDING = 5 // Round to nearest $5
-  private static readonly MUTAAH_ROUNDING = 10 // Round to nearest $10
+  // Rounding rules (EXACT as per specification)
+  private static readonly NAFKAH_IDDAH_RANGE_ROUNDING = 100 // Round ranges to nearest $100
+  private static readonly MUTAAH_ROUNDING = 1 // Round to nearest integer
 
   /**
-   * Calculate LAB eBantu amounts using exact formulas
+   * Calculate LAB eBantu amounts using EXACT formulas per specification
    */
   static calculateAmount(inputs: LABFormulaInputs): LABFormulaResult {
-    const { salary, caseType, circumstancialFactors = {} } = inputs
-    const reasoning: string[] = []
+    const { salary, caseType, includeRanges = true } = inputs
+    const overallReasoning: string[] = []
     
     // Validate salary input
-    if (salary < LABFormulaEngine.MIN_SALARY || salary > LABFormulaEngine.MAX_SALARY) {
-      throw new Error(`Salary must be between $${LABFormulaEngine.MIN_SALARY} and $${LABFormulaEngine.MAX_SALARY}`)
+    if (salary < LABFormulaEngine.MIN_SALARY) {
+      throw new Error('Salary cannot be negative')
     }
 
-    // Handle zero salary case
+    // Handle zero salary case (Business Rule 1)
     if (salary === 0) {
-      reasoning.push('Zero salary detected - returning zero amounts as per LAB guidelines')
-      return {
-        nafkahIddah: caseType === 'nafkah_iddah' || caseType === 'both' ? 0 : undefined,
-        mutaah: caseType === 'mutaah' || caseType === 'both' ? 0 : undefined,
-        details: {
-          salary: 0,
-          appliedCoefficients: {},
-          calculationMethod: 'Zero salary handling',
-          confidence: 1.0,
-          reasoning,
-          appliedRounding: {},
-          thresholds: {
-            salaryThreshold: LABFormulaEngine.SALARY_THRESHOLD,
-            minimumAmounts: {
-              nafkahIddah: LABFormulaEngine.NAFKAH_IDDAH_MIN,
-              mutaah: LABFormulaEngine.MUTAAH_MIN
-            }
-          }
-        }
-      }
+      overallReasoning.push('Zero salary detected - returning zero amounts as per LAB business rules')
+      return LABFormulaEngine.createZeroResult(caseType, overallReasoning)
+    }
+
+    // Handle high-income case (Business Rule 4)
+    if (salary > LABFormulaEngine.SALARY_THRESHOLD) {
+      overallReasoning.push(`Salary $${salary} exceeds $${LABFormulaEngine.SALARY_THRESHOLD} threshold - refer to legal advice (out of scope for LAB)`)
+      return LABFormulaEngine.createOutOfScopeResult(salary, caseType, overallReasoning)
     }
 
     const result: LABFormulaResult = {
       details: {
         salary,
         appliedCoefficients: {},
-        calculationMethod: 'Official LAB eBantu Formula',
-        confidence: 0.95,
-        reasoning,
-        ranges: {},
-        appliedRounding: {},
-        thresholds: {
-          salaryThreshold: LABFormulaEngine.SALARY_THRESHOLD,
-          minimumAmounts: {
-            nafkahIddah: LABFormulaEngine.NAFKAH_IDDAH_MIN,
-            mutaah: LABFormulaEngine.MUTAAH_MIN
-          }
-        }
+        calculationMethod: 'Official LAB eBantu Formula (Exact Specification)',
+        confidence: 1.0,
+        overallReasoning
       }
     }
 
     // Calculate Nafkah Iddah if requested
     if (caseType === 'nafkah_iddah' || caseType === 'both') {
-      const nafkahResult = LABFormulaEngine.calculateNafkahIddah(salary, circumstancialFactors)
-      result.nafkahIddah = nafkahResult.amount
+      const nafkahResult = LABFormulaEngine.calculateNafkahIddah(salary, includeRanges)
+      result.nafkahIddah = nafkahResult
       result.details.appliedCoefficients.nafkahIddahMultiplier = LABFormulaEngine.NAFKAH_IDDAH_MULTIPLIER
       result.details.appliedCoefficients.nafkahIddahConstant = LABFormulaEngine.NAFKAH_IDDAH_CONSTANT
-      result.details.ranges!.nafkahIddahRange = nafkahResult.range
-      result.details.appliedRounding.nafkahIddahOriginal = nafkahResult.originalAmount
-      result.details.appliedRounding.nafkahIddahRounded = nafkahResult.amount
-      reasoning.push(...nafkahResult.reasoning)
     }
 
     // Calculate Mutaah if requested
     if (caseType === 'mutaah' || caseType === 'both') {
-      const mutaahResult = LABFormulaEngine.calculateMutaah(salary, circumstancialFactors)
-      result.mutaah = mutaahResult.amount
+      const mutaahResult = LABFormulaEngine.calculateMutaah(salary, includeRanges)
+      result.mutaah = mutaahResult
       result.details.appliedCoefficients.mutaahMultiplier = LABFormulaEngine.MUTAAH_MULTIPLIER
       result.details.appliedCoefficients.mutaahConstant = LABFormulaEngine.MUTAAH_CONSTANT
-      result.details.ranges!.mutaahRange = mutaahResult.range
-      result.details.appliedRounding.mutaahOriginal = mutaahResult.originalAmount
-      result.details.appliedRounding.mutaahRounded = mutaahResult.amount
-      reasoning.push(...mutaahResult.reasoning)
-    }
-
-    // Special handling for high earners above salary threshold
-    if (salary > LABFormulaEngine.SALARY_THRESHOLD) {
-      reasoning.push(`High earner above $${LABFormulaEngine.SALARY_THRESHOLD} threshold - standard formulas applied with potential judicial discretion`)
-      result.details.confidence = 0.85 // Lower confidence for high earners
     }
 
     return result
   }
 
   /**
-   * Calculate Nafkah Iddah: Amount per month = 0.14 × salary + 47
+   * Calculate Nafkah Iddah using EXACT specification:
+   * Primary: Amount per month = 0.14 × salary + 47
+   * Lower range: 0.14 × salary – 3 (rounded to nearest hundred; not less than 0)
+   * Upper range: 0.14 × salary + 197 (rounded to nearest hundred)
    */
-  private static calculateNafkahIddah(
-    salary: number, 
-    factors: LABFormulaInputs['circumstancialFactors'] = {}
-  ): {
+  private static calculateNafkahIddah(salary: number, includeRanges: boolean): {
     amount: number
-    originalAmount: number
-    range: { min: number; max: number }
+    lowerRange: number
+    upperRange: number
+    isOutOfScope: boolean
     reasoning: string[]
   } {
     const reasoning: string[] = []
     
-    // Apply exact LAB formula
-    const baseAmount = (LABFormulaEngine.NAFKAH_IDDAH_MULTIPLIER * salary) + LABFormulaEngine.NAFKAH_IDDAH_CONSTANT
-    reasoning.push(`Base calculation: (${LABFormulaEngine.NAFKAH_IDDAH_MULTIPLIER} × $${salary}) + ${LABFormulaEngine.NAFKAH_IDDAH_CONSTANT} = $${baseAmount.toFixed(2)}`)
+    // Primary formula calculation
+    const primaryAmount = (LABFormulaEngine.NAFKAH_IDDAH_MULTIPLIER * salary) + LABFormulaEngine.NAFKAH_IDDAH_CONSTANT
+    reasoning.push(`Primary calculation: (${LABFormulaEngine.NAFKAH_IDDAH_MULTIPLIER} × $${salary}) + ${LABFormulaEngine.NAFKAH_IDDAH_CONSTANT} = $${primaryAmount.toFixed(2)}`)
 
-    // Apply circumstantial adjustments
-    let adjustedAmount = baseAmount
-    if (factors.exceptionalCircumstances) {
-      adjustedAmount = baseAmount * (1 + LABFormulaEngine.NAFKAH_IDDAH_UPPER_ADJUSTMENT)
-      reasoning.push(`Exceptional circumstances: +${(LABFormulaEngine.NAFKAH_IDDAH_UPPER_ADJUSTMENT * 100)}% = $${adjustedAmount.toFixed(2)}`)
-    } else if (factors.reducedCircumstances || factors.economicHardship) {
-      adjustedAmount = baseAmount * (1 - LABFormulaEngine.NAFKAH_IDDAH_LOWER_ADJUSTMENT)
-      reasoning.push(`Reduced circumstances: -${(LABFormulaEngine.NAFKAH_IDDAH_LOWER_ADJUSTMENT * 100)}% = $${adjustedAmount.toFixed(2)}`)
+    // Apply business rule: if output < 0, set to 0
+    const finalAmount = Math.max(0, primaryAmount)
+    if (finalAmount !== primaryAmount) {
+      reasoning.push(`Applied business rule: negative result set to $0`)
     }
 
-    // Calculate ranges
-    const upperRange = baseAmount * (1 + LABFormulaEngine.NAFKAH_IDDAH_UPPER_ADJUSTMENT)
-    const lowerRange = Math.max(
-      baseAmount * (1 - LABFormulaEngine.NAFKAH_IDDAH_LOWER_ADJUSTMENT),
-      LABFormulaEngine.NAFKAH_IDDAH_MIN
-    )
+    // Calculate ranges if requested
+    let lowerRange = 0
+    let upperRange = 0
 
-    // Apply minimum threshold
-    const thresholdAmount = Math.max(adjustedAmount, LABFormulaEngine.NAFKAH_IDDAH_MIN)
-    if (thresholdAmount > adjustedAmount) {
-      reasoning.push(`Applied minimum threshold: $${LABFormulaEngine.NAFKAH_IDDAH_MIN}/month`)
-    }
+    if (includeRanges) {
+      // Lower range: 0.14 × salary – 3 (rounded to nearest hundred; not less than 0)
+      const lowerCalc = (LABFormulaEngine.NAFKAH_IDDAH_MULTIPLIER * salary) + LABFormulaEngine.NAFKAH_IDDAH_LOWER_OFFSET
+      lowerRange = Math.max(0, LABFormulaEngine.roundToNearest(lowerCalc, LABFormulaEngine.NAFKAH_IDDAH_RANGE_ROUNDING))
+      reasoning.push(`Lower range: (${LABFormulaEngine.NAFKAH_IDDAH_MULTIPLIER} × $${salary}) + ${LABFormulaEngine.NAFKAH_IDDAH_LOWER_OFFSET} = $${lowerCalc.toFixed(2)}, rounded to $${lowerRange}`)
 
-    // Apply rounding rules
-    const roundedAmount = LABFormulaEngine.roundToNearest(thresholdAmount, LABFormulaEngine.NAFKAH_IDDAH_ROUNDING)
-    if (roundedAmount !== thresholdAmount) {
-      reasoning.push(`Rounded to nearest $${LABFormulaEngine.NAFKAH_IDDAH_ROUNDING}: $${roundedAmount}`)
+      // Upper range: 0.14 × salary + 197 (rounded to nearest hundred)
+      const upperCalc = (LABFormulaEngine.NAFKAH_IDDAH_MULTIPLIER * salary) + LABFormulaEngine.NAFKAH_IDDAH_UPPER_OFFSET
+      upperRange = LABFormulaEngine.roundToNearest(upperCalc, LABFormulaEngine.NAFKAH_IDDAH_RANGE_ROUNDING)
+      reasoning.push(`Upper range: (${LABFormulaEngine.NAFKAH_IDDAH_MULTIPLIER} × $${salary}) + ${LABFormulaEngine.NAFKAH_IDDAH_UPPER_OFFSET} = $${upperCalc.toFixed(2)}, rounded to $${upperRange}`)
     }
 
     return {
-      amount: roundedAmount,
-      originalAmount: baseAmount,
-      range: { 
-        min: LABFormulaEngine.roundToNearest(lowerRange, LABFormulaEngine.NAFKAH_IDDAH_ROUNDING),
-        max: LABFormulaEngine.roundToNearest(upperRange, LABFormulaEngine.NAFKAH_IDDAH_ROUNDING)
-      },
+      amount: finalAmount,
+      lowerRange,
+      upperRange,
+      isOutOfScope: false,
       reasoning
     }
   }
 
   /**
-   * Calculate Mutaah: Amount = 0.00096 × salary + 0.85
+   * Calculate Mutaah using EXACT specification:
+   * Primary: Amount per day = 0.00096 × salary + 0.85 (rounded to nearest integer)
+   * Lower range: 0.00096 × salary – 0.15 (rounded to nearest integer)
+   * Upper range: 0.00096 × salary + 1.85 (rounded to nearest integer)
    */
-  private static calculateMutaah(
-    salary: number, 
-    factors: LABFormulaInputs['circumstancialFactors'] = {}
-  ): {
+  private static calculateMutaah(salary: number, includeRanges: boolean): {
     amount: number
-    originalAmount: number
-    range: { min: number; max: number }
+    lowerRange: number
+    upperRange: number
+    isOutOfScope: boolean
     reasoning: string[]
   } {
     const reasoning: string[] = []
     
-    // Apply exact LAB formula
-    const baseAmount = (LABFormulaEngine.MUTAAH_MULTIPLIER * salary) + LABFormulaEngine.MUTAAH_CONSTANT
-    reasoning.push(`Base calculation: (${LABFormulaEngine.MUTAAH_MULTIPLIER} × $${salary}) + ${LABFormulaEngine.MUTAAH_CONSTANT} = $${baseAmount.toFixed(2)}`)
+    // Primary formula calculation
+    const primaryCalc = (LABFormulaEngine.MUTAAH_MULTIPLIER * salary) + LABFormulaEngine.MUTAAH_CONSTANT
+    const primaryAmount = LABFormulaEngine.roundToNearest(primaryCalc, LABFormulaEngine.MUTAAH_ROUNDING)
+    reasoning.push(`Primary calculation: (${LABFormulaEngine.MUTAAH_MULTIPLIER} × $${salary}) + ${LABFormulaEngine.MUTAAH_CONSTANT} = $${primaryCalc.toFixed(3)}, rounded to $${primaryAmount}`)
 
-    // Apply circumstantial adjustments
-    let adjustedAmount = baseAmount
-    if (factors.exceptionalCircumstances) {
-      adjustedAmount = baseAmount * (1 + LABFormulaEngine.MUTAAH_UPPER_ADJUSTMENT)
-      reasoning.push(`Exceptional circumstances: +${(LABFormulaEngine.MUTAAH_UPPER_ADJUSTMENT * 100)}% = $${adjustedAmount.toFixed(2)}`)
-    } else if (factors.reducedCircumstances || factors.economicHardship) {
-      adjustedAmount = baseAmount * (1 - LABFormulaEngine.MUTAAH_LOWER_ADJUSTMENT)
-      reasoning.push(`Reduced circumstances: -${(LABFormulaEngine.MUTAAH_LOWER_ADJUSTMENT * 100)}% = $${adjustedAmount.toFixed(2)}`)
+    // Apply business rule: if output < 0, set to 0
+    const finalAmount = Math.max(0, primaryAmount)
+    if (finalAmount !== primaryAmount) {
+      reasoning.push(`Applied business rule: negative result set to $0`)
     }
 
-    // Calculate ranges
-    const upperRange = baseAmount * (1 + LABFormulaEngine.MUTAAH_UPPER_ADJUSTMENT)
-    const lowerRange = Math.max(
-      baseAmount * (1 - LABFormulaEngine.MUTAAH_LOWER_ADJUSTMENT),
-      LABFormulaEngine.MUTAAH_MIN
-    )
+    // Calculate ranges if requested
+    let lowerRange = 0
+    let upperRange = 0
 
-    // Apply minimum threshold
-    const thresholdAmount = Math.max(adjustedAmount, LABFormulaEngine.MUTAAH_MIN)
-    if (thresholdAmount > adjustedAmount) {
-      reasoning.push(`Applied minimum threshold: $${LABFormulaEngine.MUTAAH_MIN}`)
-    }
+    if (includeRanges) {
+      // Lower range: 0.00096 × salary – 0.15 (rounded to nearest integer; not less than 0)
+      const lowerCalc = (LABFormulaEngine.MUTAAH_MULTIPLIER * salary) + LABFormulaEngine.MUTAAH_LOWER_OFFSET
+      lowerRange = Math.max(0, LABFormulaEngine.roundToNearest(lowerCalc, LABFormulaEngine.MUTAAH_ROUNDING))
+      reasoning.push(`Lower range: (${LABFormulaEngine.MUTAAH_MULTIPLIER} × $${salary}) + ${LABFormulaEngine.MUTAAH_LOWER_OFFSET} = $${lowerCalc.toFixed(3)}, rounded to $${lowerRange}`)
 
-    // Apply rounding rules
-    const roundedAmount = LABFormulaEngine.roundToNearest(thresholdAmount, LABFormulaEngine.MUTAAH_ROUNDING)
-    if (roundedAmount !== thresholdAmount) {
-      reasoning.push(`Rounded to nearest $${LABFormulaEngine.MUTAAH_ROUNDING}: $${roundedAmount}`)
+      // Upper range: 0.00096 × salary + 1.85 (rounded to nearest integer)
+      const upperCalc = (LABFormulaEngine.MUTAAH_MULTIPLIER * salary) + LABFormulaEngine.MUTAAH_UPPER_OFFSET
+      upperRange = LABFormulaEngine.roundToNearest(upperCalc, LABFormulaEngine.MUTAAH_ROUNDING)
+      reasoning.push(`Upper range: (${LABFormulaEngine.MUTAAH_MULTIPLIER} × $${salary}) + ${LABFormulaEngine.MUTAAH_UPPER_OFFSET} = $${upperCalc.toFixed(3)}, rounded to $${upperRange}`)
     }
 
     return {
-      amount: roundedAmount,
-      originalAmount: baseAmount,
-      range: { 
-        min: LABFormulaEngine.roundToNearest(lowerRange, LABFormulaEngine.MUTAAH_ROUNDING),
-        max: LABFormulaEngine.roundToNearest(upperRange, LABFormulaEngine.MUTAAH_ROUNDING)
-      },
+      amount: finalAmount,
+      lowerRange,
+      upperRange,
+      isOutOfScope: false,
       reasoning
     }
+  }
+
+  /**
+   * Create zero result for salary = 0 case
+   */
+  private static createZeroResult(caseType: string, overallReasoning: string[]): LABFormulaResult {
+    const result: LABFormulaResult = {
+      details: {
+        salary: 0,
+        appliedCoefficients: {},
+        calculationMethod: 'Zero salary handling (LAB Business Rule)',
+        confidence: 1.0,
+        overallReasoning
+      }
+    }
+
+    if (caseType === 'nafkah_iddah' || caseType === 'both') {
+      result.nafkahIddah = {
+        amount: 0,
+        lowerRange: 0,
+        upperRange: 0,
+        isOutOfScope: false,
+        reasoning: ['Zero salary: Nafkah Iddah amount = $0 as per LAB business rules']
+      }
+    }
+
+    if (caseType === 'mutaah' || caseType === 'both') {
+      result.mutaah = {
+        amount: 0,
+        lowerRange: 0,
+        upperRange: 0,
+        isOutOfScope: false,
+        reasoning: ['Zero salary: Mutaah amount = $0 as per LAB business rules']
+      }
+    }
+
+    return result
+  }
+
+  /**
+   * Create out-of-scope result for high-income cases
+   */
+  private static createOutOfScopeResult(salary: number, caseType: string, overallReasoning: string[]): LABFormulaResult {
+    const result: LABFormulaResult = {
+      details: {
+        salary,
+        appliedCoefficients: {},
+        calculationMethod: 'High-income case - Legal advice required',
+        confidence: 1.0,
+        overallReasoning
+      }
+    }
+
+    if (caseType === 'nafkah_iddah' || caseType === 'both') {
+      result.nafkahIddah = {
+        amount: 0,
+        lowerRange: 0,
+        upperRange: 0,
+        isOutOfScope: true,
+        reasoning: [`Salary $${salary} > $${LABFormulaEngine.SALARY_THRESHOLD}: Refer to legal advice for Nafkah Iddah calculation`]
+      }
+    }
+
+    if (caseType === 'mutaah' || caseType === 'both') {
+      result.mutaah = {
+        amount: 0,
+        lowerRange: 0,
+        upperRange: 0,
+        isOutOfScope: true,
+        reasoning: [`Salary $${salary} > $${LABFormulaEngine.SALARY_THRESHOLD}: Refer to legal advice for Mutaah calculation`]
+      }
+    }
+
+    return result
   }
 
   /**
@@ -313,11 +322,7 @@ export class LABFormulaEngine {
     const errors: string[] = []
 
     if (inputs.salary < LABFormulaEngine.MIN_SALARY) {
-      errors.push(`Salary cannot be negative`)
-    }
-
-    if (inputs.salary > LABFormulaEngine.MAX_SALARY) {
-      errors.push(`Salary exceeds maximum threshold of $${LABFormulaEngine.MAX_SALARY}`)
+      errors.push('Salary cannot be negative')
     }
 
     if (!['nafkah_iddah', 'mutaah', 'both'].includes(inputs.caseType)) {
@@ -335,58 +340,51 @@ export class LABFormulaEngine {
    */
   static getFormulaSpecs(): {
     nafkahIddah: {
-      formula: string
-      multiplier: number
-      constant: number
-      minAmount: number
-      rounding: number
-      ranges: { upper: string; lower: string }
+      primaryFormula: string
+      lowerRangeFormula: string
+      upperRangeFormula: string
+      rounding: string
     }
     mutaah: {
-      formula: string
-      multiplier: number
-      constant: number
-      minAmount: number
-      rounding: number
-      ranges: { upper: string; lower: string }
+      primaryFormula: string
+      lowerRangeFormula: string
+      upperRangeFormula: string
+      rounding: string
     }
+    businessRules: string[]
     salaryThreshold: number
   } {
     return {
       nafkahIddah: {
-        formula: `${LABFormulaEngine.NAFKAH_IDDAH_MULTIPLIER} × salary + ${LABFormulaEngine.NAFKAH_IDDAH_CONSTANT}`,
-        multiplier: LABFormulaEngine.NAFKAH_IDDAH_MULTIPLIER,
-        constant: LABFormulaEngine.NAFKAH_IDDAH_CONSTANT,
-        minAmount: LABFormulaEngine.NAFKAH_IDDAH_MIN,
-        rounding: LABFormulaEngine.NAFKAH_IDDAH_ROUNDING,
-        ranges: {
-          upper: `+${LABFormulaEngine.NAFKAH_IDDAH_UPPER_ADJUSTMENT * 100}% for exceptional circumstances`,
-          lower: `-${LABFormulaEngine.NAFKAH_IDDAH_LOWER_ADJUSTMENT * 100}% for reduced circumstances`
-        }
+        primaryFormula: `${LABFormulaEngine.NAFKAH_IDDAH_MULTIPLIER} × salary + ${LABFormulaEngine.NAFKAH_IDDAH_CONSTANT}`,
+        lowerRangeFormula: `${LABFormulaEngine.NAFKAH_IDDAH_MULTIPLIER} × salary + ${LABFormulaEngine.NAFKAH_IDDAH_LOWER_OFFSET}`,
+        upperRangeFormula: `${LABFormulaEngine.NAFKAH_IDDAH_MULTIPLIER} × salary + ${LABFormulaEngine.NAFKAH_IDDAH_UPPER_OFFSET}`,
+        rounding: `Ranges rounded to nearest $${LABFormulaEngine.NAFKAH_IDDAH_RANGE_ROUNDING}`
       },
       mutaah: {
-        formula: `${LABFormulaEngine.MUTAAH_MULTIPLIER} × salary + ${LABFormulaEngine.MUTAAH_CONSTANT}`,
-        multiplier: LABFormulaEngine.MUTAAH_MULTIPLIER,
-        constant: LABFormulaEngine.MUTAAH_CONSTANT,
-        minAmount: LABFormulaEngine.MUTAAH_MIN,
-        rounding: LABFormulaEngine.MUTAAH_ROUNDING,
-        ranges: {
-          upper: `+${LABFormulaEngine.MUTAAH_UPPER_ADJUSTMENT * 100}% for exceptional circumstances`,
-          lower: `-${LABFormulaEngine.MUTAAH_LOWER_ADJUSTMENT * 100}% for reduced circumstances`
-        }
+        primaryFormula: `${LABFormulaEngine.MUTAAH_MULTIPLIER} × salary + ${LABFormulaEngine.MUTAAH_CONSTANT}`,
+        lowerRangeFormula: `${LABFormulaEngine.MUTAAH_MULTIPLIER} × salary + ${LABFormulaEngine.MUTAAH_LOWER_OFFSET}`,
+        upperRangeFormula: `${LABFormulaEngine.MUTAAH_MULTIPLIER} × salary + ${LABFormulaEngine.MUTAAH_UPPER_OFFSET}`,
+        rounding: `Rounded to nearest integer`
       },
+      businessRules: [
+        'If salary = 0, amounts = 0',
+        'If formula output < 0, amounts = 0',
+        'If lower range < 0, set it to 0',
+        `If salary > $${LABFormulaEngine.SALARY_THRESHOLD}, refer to legal advice (out of scope for LAB)`
+      ],
       salaryThreshold: LABFormulaEngine.SALARY_THRESHOLD
     }
   }
 
   /**
-   * Generate test cases for validation
+   * Generate test cases for validation with EXACT expected outputs
    */
   static generateTestCases(): Array<{
     input: LABFormulaInputs
     expectedOutput: {
-      nafkahIddah?: number
-      mutaah?: number
+      nafkahIddah?: { amount: number; lowerRange: number; upperRange: number }
+      mutaah?: { amount: number; lowerRange: number; upperRange: number }
       description: string
     }
   }> {
@@ -394,43 +392,37 @@ export class LABFormulaEngine {
       {
         input: { salary: 0, caseType: 'both' },
         expectedOutput: {
-          nafkahIddah: 0,
-          mutaah: 0,
-          description: 'Zero salary handling'
+          nafkahIddah: { amount: 0, lowerRange: 0, upperRange: 0 },
+          mutaah: { amount: 0, lowerRange: 0, upperRange: 0 },
+          description: 'Zero salary handling - both amounts = 0'
         }
       },
       {
         input: { salary: 1000, caseType: 'nafkah_iddah' },
         expectedOutput: {
-          nafkahIddah: 190, // (0.14 * 1000 + 47) = 187, rounded to 190
-          description: 'Basic nafkah iddah calculation with rounding'
+          nafkahIddah: { amount: 187, lowerRange: 100, upperRange: 300 }, // 0.14*1000+47=187, ranges: 137→100, 337→300
+          description: 'Standard nafkah iddah calculation with range rounding'
         }
       },
       {
         input: { salary: 2000, caseType: 'mutaah' },
         expectedOutput: {
-          mutaah: 100, // (0.00096 * 2000 + 0.85) = 2.77, minimum threshold applied
-          description: 'Mutaah calculation with minimum threshold'
+          mutaah: { amount: 3, lowerRange: 2, upperRange: 4 }, // 0.00096*2000+0.85=2.77→3, ranges: 1.77→2, 4.77→5
+          description: 'Standard mutaah calculation with integer rounding'
         }
       },
       {
-        input: { 
-          salary: 3000, 
-          caseType: 'both',
-          circumstancialFactors: { exceptionalCircumstances: true }
-        },
+        input: { salary: 3000, caseType: 'both' },
         expectedOutput: {
-          nafkahIddah: 630, // (0.14 * 3000 + 47) * 1.2 = 625.2, rounded to 625
-          mutaah: 110, // (0.00096 * 3000 + 0.85) * 1.25 = 4.6, minimum threshold applied
-          description: 'Both calculations with exceptional circumstances'
+          nafkahIddah: { amount: 467, lowerRange: 400, upperRange: 600 }, // 0.14*3000+47=467, ranges: 417→400, 617→600
+          mutaah: { amount: 4, lowerRange: 3, upperRange: 6 }, // 0.00096*3000+0.85=3.73→4, ranges: 2.73→3, 5.73→6
+          description: 'Both calculations for mid-range salary'
         }
       },
       {
         input: { salary: 5000, caseType: 'both' },
         expectedOutput: {
-          nafkahIddah: 750, // (0.14 * 5000 + 47) = 747, rounded to 750
-          mutaah: 110, // (0.00096 * 5000 + 0.85) = 5.65, minimum threshold applied  
-          description: 'High earner above threshold'
+          description: 'High salary - out of scope, refer to legal advice'
         }
       }
     ]
