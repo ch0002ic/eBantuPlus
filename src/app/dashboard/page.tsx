@@ -100,12 +100,40 @@ const enhancedCaseData = [
 type CaseData = typeof enhancedCaseData[0]
 
 export default function Dashboard() {
-  const [cases, setCases] = useState(enhancedCaseData)
+  const [cases, setCases] = useState<CaseData[]>([])
   const [selectedCase, setSelectedCase] = useState<CaseData | null>(null)
   const [viewMode, setViewMode] = useState<'list' | 'detail' | 'edit' | 'view'>('list')
   const [editFormData, setEditFormData] = useState<Partial<CaseData['extractedData']>>({})
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [actionFeedback, setActionFeedback] = useState<{type: 'success' | 'error', message: string} | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+
+  // Fetch cases from API
+  useEffect(() => {
+    const fetchCases = async () => {
+      try {
+        setIsLoading(true)
+        const response = await fetch('/api/cases/simple')
+        const result = await response.json()
+        
+        if (result.success) {
+          setCases(result.data)
+        } else {
+          console.error('Failed to fetch cases:', result.error)
+          // Fall back to static data
+          setCases(enhancedCaseData)
+        }
+      } catch (error) {
+        console.error('Error fetching cases:', error)
+        // Fall back to static data
+        setCases(enhancedCaseData)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchCases()
+  }, [])
 
   const handleViewCase = (caseData: CaseData) => {
     setSelectedCase(caseData)
@@ -251,22 +279,38 @@ export default function Dashboard() {
           <div className="px-6 py-4 border-b border-gray-200">
             <h2 className="text-lg font-semibold text-gray-900">Recent Cases</h2>
           </div>
-          <div className="divide-y divide-gray-200">
-            {cases.slice(0, 3).map((caseData: CaseData) => (
-              <CaseRow
-                key={caseData.id}
-                caseData={caseData}
-                onView={handleViewCase}
-                onEdit={handleEditCase}
-                onValidate={(id: string) => handleValidateCase(id, 'approve')}
-              />
-            ))}
-          </div>
-          <div className="px-6 py-3 bg-gray-50 text-center">
-            <Link href="/cases" className="text-blue-600 hover:text-blue-700 font-medium">
-              View All Cases →
-            </Link>
-          </div>
+          {isLoading ? (
+            <div className="px-6 py-8 text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-500">Loading cases...</p>
+            </div>
+          ) : cases.length === 0 ? (
+            <div className="px-6 py-8 text-center">
+              <p className="text-gray-500">No cases found. Upload a document to get started.</p>
+              <Link href="/upload" className="mt-4 inline-block bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
+                Upload Document
+              </Link>
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-200">
+              {cases.slice(0, 3).map((caseData: CaseData) => (
+                <CaseRow
+                  key={caseData.id}
+                  caseData={caseData}
+                  onView={handleViewCase}
+                  onEdit={handleEditCase}
+                  onValidate={(id: string) => handleValidateCase(id, 'approve')}
+                />
+              ))}
+            </div>
+          )}
+          {!isLoading && cases.length > 0 && (
+            <div className="px-6 py-3 bg-gray-50 text-center">
+              <Link href="/cases" className="text-blue-600 hover:text-blue-700 font-medium">
+                View All Cases →
+              </Link>
+            </div>
+          )}
         </div>
       </div>
 

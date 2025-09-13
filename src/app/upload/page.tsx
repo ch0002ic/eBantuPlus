@@ -7,6 +7,8 @@ export default function UploadPage() {
   const [isDragging, setIsDragging] = useState(false)
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [caseTitle, setCaseTitle] = useState('')
+  const [caseNumber, setCaseNumber] = useState('')
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
@@ -39,12 +41,37 @@ export default function UploadPage() {
     if (!uploadedFile) return
     
     setIsProcessing(true)
-    // Simulate processing delay
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    setIsProcessing(false)
     
-    // Redirect to dashboard after successful upload
-    window.location.href = '/dashboard'
+    try {
+      // Create form data to send file
+      const formData = new FormData()
+      formData.append('file', uploadedFile)
+      formData.append('title', caseTitle || uploadedFile.name)
+      formData.append('caseNumber', caseNumber || '')
+      
+      // Call the document processing API
+      const response = await fetch('/api/documents/process', {
+        method: 'POST',
+        body: formData
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Upload failed')
+      }
+      
+      const result = await response.json()
+      console.log('Document processed successfully:', result)
+      
+      // Redirect to dashboard after successful upload
+      window.location.href = '/dashboard'
+      
+    } catch (error) {
+      console.error('Upload error:', error)
+      alert('Upload failed. Please try again.')
+    } finally {
+      setIsProcessing(false)
+    }
   }
 
   return (
@@ -85,6 +112,8 @@ export default function UploadPage() {
             </label>
             <input
               type="text"
+              value={caseTitle}
+              onChange={(e) => setCaseTitle(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="e.g., SYC2025001 - Divorce Ancillary Matters (Nafkah Iddah & Mutaah)"
             />
@@ -96,6 +125,8 @@ export default function UploadPage() {
             </label>
             <input
               type="text"
+              value={caseNumber}
+              onChange={(e) => setCaseNumber(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="e.g., SYC2025001 (Singapore Syariah Court Case Number)"
             />

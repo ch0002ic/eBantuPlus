@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { formatCurrency, formatDateTime } from '@/lib/utils'
 
 // Type definitions
@@ -257,9 +257,55 @@ export default function CasesPage() {
   const [selectedCases, setSelectedCases] = useState<Set<string>>(new Set())
   const [editFormData, setEditFormData] = useState<Partial<CaseData>>({})
   const [bulkEditChanges, setBulkEditChanges] = useState<Partial<CaseData>>({})
-  const [casesData, setCasesData] = useState(realisticCaseData)
+  const [casesData, setCasesData] = useState<CaseData[]>([])
   const [showEditHistory, setShowEditHistory] = useState(false)
   const [editHistory, setEditHistory] = useState<EditHistoryItem[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  // Fetch cases from API
+  useEffect(() => {
+    const fetchCases = async () => {
+      try {
+        setIsLoading(true)
+        const response = await fetch('/api/cases/simple')
+        const result = await response.json()
+        
+        if (result.success) {
+          // Map API data to match the expected format
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const mappedCases = result.data.map((caseItem: any) => ({
+            id: caseItem.id,
+            title: caseItem.title,
+            caseNumber: caseItem.caseNumber || caseItem.id,
+            status: caseItem.status,
+            uploadedAt: new Date(caseItem.pdfContent?.uploadDate || Date.now()),
+            husbandIncome: caseItem.extractedData?.husbandIncome || 0,
+            nafkahIddah: caseItem.extractedData?.nafkahIddah || 0,
+            mutaah: caseItem.extractedData?.mutaah || 0,
+            confidence: caseItem.extractedData?.confidence || 0,
+            uploadedBy: { name: caseItem.uploadedBy || 'LAB Officer' },
+            extractedText: caseItem.extractedText || '',
+            marriageDuration: caseItem.extractedData?.marriageDuration || 0,
+            exclusionReason: null,
+            pdfContent: caseItem.pdfContent
+          }))
+          setCasesData(mappedCases)
+        } else {
+          console.error('Failed to fetch cases:', result.error)
+          // Fall back to static data
+          setCasesData(realisticCaseData)
+        }
+      } catch (error) {
+        console.error('Error fetching cases:', error)
+        // Fall back to static data
+        setCasesData(realisticCaseData)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchCases()
+  }, [])
 
   // Handle individual case editing
   const startEditing = (caseId: string) => {
@@ -1071,6 +1117,12 @@ export default function CasesPage() {
           </div>
 
           {/* Cases Table */}
+          {isLoading ? (
+            <div className="flex justify-center items-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <span className="ml-2 text-gray-600">Loading cases...</span>
+            </div>
+          ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
@@ -1272,6 +1324,7 @@ export default function CasesPage() {
               </tbody>
             </table>
           </div>
+          )}
 
           {/* Pagination */}
           <div className="px-6 py-3 bg-gray-50 border-t border-gray-200">
