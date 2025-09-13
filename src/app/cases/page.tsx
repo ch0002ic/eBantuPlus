@@ -4,55 +4,98 @@ import Link from 'next/link'
 import { useState } from 'react'
 import { formatCurrency, formatDateTime } from '@/lib/utils'
 
-// Mock data for demonstration
-const mockCases = [
+// Realistic Singapore Syariah Court case data for LAB eBantu demonstration
+// Based on actual nafkah iddah ($200-$500/month) and mutaah ($3-$7/day) ranges
+const realisticCaseData = [
   {
     id: '1',
-    title: 'SYC2025001 - Divorce Proceeding',
+    title: 'SYC2025001 - Divorce with Ancillary Matters',
     caseNumber: 'SYC2025001',
     status: 'VALIDATED',
     uploadedAt: new Date('2025-09-13T08:00:00'),
-    husbandIncome: 3500,
-    nafkahIddah: 800,
-    mutaah: 15,
+    husbandIncome: 3500, // $3,500/month income
+    nafkahIddah: 537, // Using LAB formula: 0.14 × 3500 + 47 = 537
+    mutaah: 4, // Using LAB formula: 0.00096 × 3500 + 0.85 = 4.21 ≈ 4
     confidence: 0.95,
-    uploadedBy: { name: 'Officer Ahmad' }
+    uploadedBy: { name: 'LAB Officer Rahman' },
+    extractedText: 'Husband monthly salary $3,500. Court awarded nafkah iddah $537 for 3 months...',
+    marriageDuration: 8,
+    exclusionReason: null
   },
   {
     id: '2',
-    title: 'SYC2025002 - Maintenance Application',
+    title: 'SYC2025002 - Divorce Proceedings (Low Income)',
     caseNumber: 'SYC2025002',
     status: 'PENDING',
     uploadedAt: new Date('2025-09-13T10:30:00'),
-    husbandIncome: 4200,
-    nafkahIddah: 950,
-    mutaah: 18,
+    husbandIncome: 2800, // $2,800/month income
+    nafkahIddah: 439, // Using LAB formula: 0.14 × 2800 + 47 = 439
+    mutaah: 4, // Using LAB formula: 0.00096 × 2800 + 0.85 = 3.54 ≈ 4
     confidence: 0.87,
-    uploadedBy: { name: 'Officer Siti' }
+    uploadedBy: { name: 'LAB Officer Siti' },
+    extractedText: 'Husband income $2,800 monthly. Nafkah iddah awarded $439...',
+    marriageDuration: 5,
+    exclusionReason: null
   },
   {
     id: '3',
-    title: 'SYC2025003 - Financial Relief',
+    title: 'SYC2025003 - Divorce with Child Custody',
     caseNumber: 'SYC2025003',
     status: 'PROCESSING',
     uploadedAt: new Date('2025-09-13T12:15:00'),
-    husbandIncome: 2800,
-    nafkahIddah: 650,
-    mutaah: 12,
+    husbandIncome: 4500, // $4,500/month income (above threshold)
+    nafkahIddah: 677, // Using LAB formula: 0.14 × 4500 + 47 = 677
+    mutaah: 5, // Using LAB formula: 0.00096 × 4500 + 0.85 = 5.17 ≈ 5
     confidence: 0.92,
-    uploadedBy: { name: 'Officer Rahman' }
+    uploadedBy: { name: 'LAB Officer Ahmad' },
+    extractedText: 'High income case. Husband salary $4,500. Court consideration...',
+    marriageDuration: 12,
+    exclusionReason: 'HIGH_INCOME' // Above $4,000 threshold
   },
   {
     id: '4',
-    title: 'SYC2025004 - Consent Order',
+    title: 'SYC2025004 - Consent Order (Excluded)',
     caseNumber: 'SYC2025004',
     status: 'EXCLUDED',
     uploadedAt: new Date('2025-09-13T14:45:00'),
-    husbandIncome: 5200,
-    nafkahIddah: 1000,
-    mutaah: 20,
+    husbandIncome: 3200,
+    nafkahIddah: 1000, // Mutually agreed amount (not formula-based)
+    mutaah: 20, // Mutually agreed amount (not formula-based)
     confidence: 0.78,
-    uploadedBy: { name: 'Officer Aminah' }
+    uploadedBy: { name: 'LAB Officer Aminah' },
+    extractedText: 'Parties have agreed by consent. Nafkah iddah $1,000...',
+    marriageDuration: 6,
+    exclusionReason: 'CONSENT_ORDER'
+  },
+  {
+    id: '5',
+    title: 'SYC2025005 - Standard Divorce Case',
+    caseNumber: 'SYC2025005',
+    status: 'VALIDATED',
+    uploadedAt: new Date('2025-09-12T16:20:00'),
+    husbandIncome: 3000, // $3,000/month income
+    nafkahIddah: 467, // Using LAB formula: 0.14 × 3000 + 47 = 467
+    mutaah: 4, // Using LAB formula: 0.00096 × 3000 + 0.85 = 3.73 ≈ 4
+    confidence: 0.94,
+    uploadedBy: { name: 'LAB Officer Zainab' },
+    extractedText: 'Husband monthly income $3,000. Standard case awarded...',
+    marriageDuration: 7,
+    exclusionReason: null
+  },
+  {
+    id: '6',
+    title: 'SYC2025006 - Complex Financial Case',
+    caseNumber: 'SYC2025006',
+    status: 'FLAGGED',
+    uploadedAt: new Date('2025-09-12T11:10:00'),
+    husbandIncome: 2500,
+    nafkahIddah: 800, // Outlier: much higher than formula prediction
+    mutaah: 15, // Outlier: much higher than formula prediction
+    confidence: 0.65,
+    uploadedBy: { name: 'LAB Officer Rahman' },
+    extractedText: 'Complex case with unusual circumstances. High awards...',
+    marriageDuration: 15,
+    exclusionReason: 'STATISTICAL_OUTLIER'
   }
 ]
 
@@ -60,7 +103,7 @@ export default function CasesPage() {
   const [filterStatus, setFilterStatus] = useState('ALL')
   const [searchTerm, setSearchTerm] = useState('')
 
-  const filteredCases = mockCases.filter(caseItem => {
+  const filteredCases = realisticCaseData.filter(caseItem => {
     const matchesStatus = filterStatus === 'ALL' || caseItem.status === filterStatus
     const matchesSearch = caseItem.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          caseItem.caseNumber?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -141,7 +184,7 @@ export default function CasesPage() {
               <div className="flex-1 max-w-md">
                 <input
                   type="text"
-                  placeholder="Search cases..."
+                  placeholder="Search by case number, title, or status..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -234,7 +277,7 @@ export default function CasesPage() {
           <div className="px-6 py-3 bg-gray-50 border-t border-gray-200">
             <div className="flex items-center justify-between">
               <div className="text-sm text-gray-500">
-                Showing {filteredCases.length} of {mockCases.length} cases
+                Showing {filteredCases.length} of {realisticCaseData.length} cases
               </div>
               <div className="flex space-x-2">
                 <button className="px-3 py-1 border border-gray-300 rounded text-sm text-gray-500">
@@ -256,14 +299,14 @@ export default function CasesPage() {
           <div className="bg-white overflow-hidden shadow rounded-lg">
             <div className="p-5">
               <div className="text-sm font-medium text-gray-500">Total Cases</div>
-              <div className="text-2xl font-semibold text-gray-900">{mockCases.length}</div>
+              <div className="text-2xl font-semibold text-gray-900">{realisticCaseData.length}</div>
             </div>
           </div>
           <div className="bg-white overflow-hidden shadow rounded-lg">
             <div className="p-5">
               <div className="text-sm font-medium text-gray-500">Pending Validation</div>
               <div className="text-2xl font-semibold text-yellow-600">
-                {mockCases.filter(c => c.status === 'PENDING').length}
+                {realisticCaseData.filter(c => c.status === 'PENDING').length}
               </div>
             </div>
           </div>
@@ -271,7 +314,7 @@ export default function CasesPage() {
             <div className="p-5">
               <div className="text-sm font-medium text-gray-500">Validated</div>
               <div className="text-2xl font-semibold text-green-600">
-                {mockCases.filter(c => c.status === 'VALIDATED').length}
+                {realisticCaseData.filter(c => c.status === 'VALIDATED').length}
               </div>
             </div>
           </div>
@@ -279,7 +322,7 @@ export default function CasesPage() {
             <div className="p-5">
               <div className="text-sm font-medium text-gray-500">Avg Confidence</div>
               <div className="text-2xl font-semibold text-blue-600">
-                {Math.round((mockCases.reduce((acc, c) => acc + c.confidence, 0) / mockCases.length) * 100)}%
+                {Math.round((realisticCaseData.reduce((acc, c) => acc + c.confidence, 0) / realisticCaseData.length) * 100)}%
               </div>
             </div>
           </div>

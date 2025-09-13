@@ -86,7 +86,7 @@ export default function UploadPage() {
             <input
               type="text"
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="e.g., SYC2025001 - Divorce Proceeding"
+              placeholder="e.g., SYC2025001 - Divorce Ancillary Matters (Nafkah Iddah & Mutaah)"
             />
           </div>
 
@@ -97,7 +97,7 @@ export default function UploadPage() {
             <input
               type="text"
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="e.g., SYC2025001"
+              placeholder="e.g., SYC2025001 (Singapore Syariah Court Case Number)"
             />
           </div>
 

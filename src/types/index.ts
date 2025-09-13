@@ -275,3 +275,38 @@ export interface AppConfig {
   aiModel: string
   retentionPeriod: number
 }
+
+// Integration types for eBantu+ system connections
+export interface FormulaUpdate {
+  nafkahIddahCoefficient: number
+  nafkahIddahConstant: number
+  mutaahCoefficient: number
+  mutaahConstant: number
+  effectiveDate: Date
+  caseDataSample: number
+  statisticalMetrics: {
+    rSquared: number
+    standardError: number
+    sampleSize: number
+  }
+}
+
+export interface CaseDocument {
+  id: string
+  title: string
+  caseNumber: string
+  courtLevel: string
+  judgmentDate: Date
+  url: string
+  extractedText: string
+  confidence: number
+}
+
+export interface ValidationResult {
+  caseId: string
+  reason: string
+  data: Record<string, unknown>
+  reviewerId?: string
+  reviewedAt?: Date
+  approved?: boolean
+}

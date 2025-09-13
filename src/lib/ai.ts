@@ -8,39 +8,62 @@ const openai = new OpenAI({
 export async function extractLegalData(text: string): Promise<AIExtractionResult> {
   try {
     const prompt = `
-You are a legal AI assistant specialized in Singapore Syariah Court cases. Extract the following information from this court judgment:
+You are an advanced legal AI assistant specialized in Singapore Syariah Court case analysis for the Legal Aid Bureau (LAB). Your task is to extract financial data that will be used to update the eBantu formula calculations for nafkah iddah and mutaah.
 
-1. Husband's monthly income (in SGD)
-2. Nafkah iddah amount awarded (monthly, in SGD)
-3. Mutaah amount awarded (daily, in SGD)
-4. Marriage duration (in months)
+EXTRACTION REQUIREMENTS:
+1. Husband's monthly income (SGD) - Look for salary, wages, employment income
+2. Nafkah iddah amount awarded (monthly SGD) - Post-divorce maintenance for 3 months
+3. Mutaah amount awarded (daily SGD) - Consolatory gift
+4. Marriage duration (in months) - Calculate from marriage to divorce/separation
+5. Case classification flags - Identify special circumstances
 
-Judgment text:
+LAB FORMULA CONTEXT:
+- Standard Nafkah Iddah: 0.14 × husband_income + 47 (rounded to nearest hundred)
+- Standard Mutaah: 0.00096 × husband_income + 0.85 (rounded to nearest integer)
+- High Income Threshold: >$4,000/month requires special review
+- Exclude: Consent orders, outliers, cases with extraordinary circumstances
+
+JUDGMENT TEXT:
 ${text}
 
-Please respond in the following JSON format:
+RESPOND IN JSON FORMAT:
 {
   "husbandIncome": number | null,
-  "nafkahIddah": number | null,
+  "nafkahIddah": number | null, 
   "mutaah": number | null,
   "marriageDuration": number | null,
   "confidence": number (0-1),
-  "reasoning": "explanation of extraction",
+  "reasoning": "detailed explanation including formula verification",
+  "caseClassification": {
+    "isConsentOrder": boolean,
+    "isHighIncome": boolean,
+    "isOutlier": boolean,
+    "specialCircumstances": string[]
+  },
   "extractedEntities": [
     {
       "entity": "entity_name",
-      "value": "extracted_value",
-      "confidence": number (0-1)
+      "value": "extracted_value", 
+      "confidence": number (0-1),
+      "sourceText": "relevant quote from judgment"
     }
-  ]
+  ],
+  "formulaVerification": {
+    "nafkahIddahExpected": number,
+    "mutaahExpected": number,
+    "matchesFormula": boolean,
+    "deviationReason": string | null
+  }
 }
 
-Important notes:
-- Extract only explicitly mentioned amounts
-- Convert all amounts to SGD if needed
-- If information is not found, use null
-- Provide confidence score based on clarity of information
-- Look for keywords like "nafkah iddah", "mutaah", "income", "salary", "maintenance"
+CRITICAL INSTRUCTIONS:
+- Extract only explicitly stated amounts from the judgment
+- Verify against LAB formula calculations  
+- Flag cases that deviate from standard formulas
+- Identify consent orders (look for "parties agree", "by consent", "settlement")
+- Flag high income cases (>$4,000/month)
+- Note any extraordinary circumstances affecting awards
+- Provide source text snippets for verification
 `
 
     const response = await openai.chat.completions.create({
