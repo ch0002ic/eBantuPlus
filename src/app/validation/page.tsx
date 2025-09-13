@@ -2,7 +2,11 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
-import { formatCurrency } from '@/lib/utils'
+import { 
+  calculateNafkahIddah, 
+  calculateMutaah, 
+  formatSGD 
+} from '@/lib/formulas'
 
 // Mock data for validation queue
 const mockValidationQueue = [
@@ -47,22 +51,29 @@ export default function ValidationPage() {
   const handleDataChange = (field: string, value: number) => {
     setValidationData(prev => ({
       ...prev,
-      [field]: value
+      [field]: isNaN(value) ? 0 : value
     }))
   }
 
-  const handleValidation = (action: string) => {
-    // Simulate validation process
-    console.log(`${action} case ${currentCase.id}`, { validationData, comment })
-    
-    // Move to next case
+    const handleValidation = (action: string) => {
+    const validationResult = {
+      caseId: currentCase.id,
+      action,
+      validatedData: validationData,
+      comment,
+      timestamp: new Date().toISOString(),
+      userId: 'current-user' // In production, get from auth context
+    }
+
+    // In production, this would be an API call to save validation
+    // For now, simulate success and move to next case
     if (currentCaseIndex < mockValidationQueue.length - 1) {
-      setCurrentCaseIndex(prev => prev + 1)
+      setCurrentCaseIndex(currentCaseIndex + 1)
       setValidationData(mockValidationQueue[currentCaseIndex + 1].extractedData)
       setComment('')
     } else {
-      alert('All cases validated! Redirecting to dashboard.')
-      window.location.href = '/dashboard'
+      // In production, redirect to dashboard or cases list
+      window.location.href = '/cases'
     }
   }
 
@@ -175,8 +186,11 @@ export default function ValidationPage() {
                   </label>
                   <input
                     type="number"
-                    value={validationData.husbandIncome}
-                    onChange={(e) => handleDataChange('husbandIncome', parseFloat(e.target.value))}
+                    value={validationData.husbandIncome || ''}
+                    onChange={(e) => {
+                      const value = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                      handleDataChange('husbandIncome', value);
+                    }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
@@ -187,8 +201,11 @@ export default function ValidationPage() {
                   </label>
                   <input
                     type="number"
-                    value={validationData.nafkahIddah}
-                    onChange={(e) => handleDataChange('nafkahIddah', parseFloat(e.target.value))}
+                    value={validationData.nafkahIddah || ''}
+                    onChange={(e) => {
+                      const value = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                      handleDataChange('nafkahIddah', value);
+                    }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
@@ -199,8 +216,11 @@ export default function ValidationPage() {
                   </label>
                   <input
                     type="number"
-                    value={validationData.mutaah}
-                    onChange={(e) => handleDataChange('mutaah', parseFloat(e.target.value))}
+                    value={validationData.mutaah || ''}
+                    onChange={(e) => {
+                      const value = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                      handleDataChange('mutaah', value);
+                    }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
@@ -211,37 +231,90 @@ export default function ValidationPage() {
                   </label>
                   <input
                     type="number"
-                    value={validationData.marriageDuration}
-                    onChange={(e) => handleDataChange('marriageDuration', parseInt(e.target.value))}
+                    value={validationData.marriageDuration || ''}
+                    onChange={(e) => {
+                      const value = e.target.value === '' ? 0 : parseInt(e.target.value);
+                      handleDataChange('marriageDuration', value);
+                    }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               </div>
             </div>
 
-            {/* Calculated Ratios */}
+            {/* Calculated Ratios using LAB Formula */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-              <h3 className="text-lg font-medium text-blue-900 mb-3">Calculated Ratios</h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-blue-700">Nafkah/Income Ratio:</span>
-                  <span className="font-medium text-blue-900">
-                    {Math.round((validationData.nafkahIddah / validationData.husbandIncome) * 100)}%
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-blue-700">Mutaah (Monthly):</span>
-                  <span className="font-medium text-blue-900">
-                    {formatCurrency(validationData.mutaah * 30)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-blue-700">Total Monthly Support:</span>
-                  <span className="font-medium text-blue-900">
-                    {formatCurrency(validationData.nafkahIddah + (validationData.mutaah * 30))}
-                  </span>
-                </div>
-              </div>
+              <h3 className="text-lg font-medium text-blue-900 mb-3">LAB Formula Calculations</h3>
+              {(() => {
+                const nafkahResult = calculateNafkahIddah(validationData.husbandIncome)
+                const mutaahResult = calculateMutaah(validationData.husbandIncome)
+                
+                if (nafkahResult.shouldSeekLegalAdvice || mutaahResult.shouldSeekLegalAdvice) {
+                  return (
+                    <div className="bg-red-50 border border-red-200 rounded p-3 mb-3">
+                      <p className="text-red-800 font-medium">⚠️ High Income Case</p>
+                      <p className="text-red-700 text-sm">
+                        Salary &gt; $4,000 - Refer to legal advice (out of LAB scope)
+                      </p>
+                    </div>
+                  )
+                }
+
+                return (
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-sm text-blue-700 mb-2">
+                        <strong>Nafkah Iddah Formula:</strong> 0.14 × {formatSGD(validationData.husbandIncome)} + 47
+                      </p>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-blue-700">Calculated Amount:</span>
+                        <span className="font-medium text-blue-900">
+                          {formatSGD(nafkahResult.monthlyAmount)}/month
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-blue-700">Range:</span>
+                        <span className="font-medium text-blue-900">
+                          {formatSGD(nafkahResult.lowerRange)} - {formatSGD(nafkahResult.upperRange)}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="border-t pt-3">
+                      <p className="text-sm text-blue-700 mb-2">
+                        <strong>Mutaah Formula:</strong> 0.00096 × {formatSGD(validationData.husbandIncome)} + 0.85
+                      </p>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-blue-700">Daily Amount:</span>
+                        <span className="font-medium text-blue-900">
+                          {formatSGD(mutaahResult.dailyAmount)}/day
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-blue-700">Monthly Equivalent:</span>
+                        <span className="font-medium text-blue-900">
+                          {formatSGD(mutaahResult.monthlyAmount)}/month
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="border-t pt-3 bg-green-50 p-2 rounded">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-green-700 font-medium">Total Monthly Support:</span>
+                        <span className="font-bold text-green-900">
+                          {formatSGD(nafkahResult.monthlyAmount + mutaahResult.monthlyAmount)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-green-600">vs Current Input:</span>
+                        <span className="text-green-800">
+                          {formatSGD(validationData.nafkahIddah + (validationData.mutaah * 30))}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
 
             {/* Comments */}

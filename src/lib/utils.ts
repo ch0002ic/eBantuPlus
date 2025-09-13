@@ -61,11 +61,21 @@ export function generateCaseNumber(): string {
   return `SYC${year}${random}`
 }
 
-export function extractTextFromPDF(buffer: Buffer): Promise<string> {
-  // This would use pdf-parse library in production
-  // For now, return a placeholder
-  console.log('Processing PDF buffer of size:', buffer.length)
-  return Promise.resolve("Extracted text would appear here...")
+export async function extractTextFromPDF(buffer: ArrayBuffer): Promise<string> {
+  try {
+    // PDF processing would go here - using pdfjs-dist or similar
+    // For hackathon demo, return structured placeholder
+    return `
+      SYARIAH COURT CASE EXTRACT
+      Case No: SYC2024001
+      Husband's Income: $2,800/month
+      Nafkah Iddah Awarded: $400/month
+      Mutaah Awarded: $5/day
+      Marriage Duration: 18 months
+    `.trim()
+  } catch (error) {
+    throw new Error(`PDF processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+  }
 }
 
 export function validateFileType(filename: string): boolean {

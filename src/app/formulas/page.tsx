@@ -2,31 +2,43 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
-import { formatCurrency } from '@/lib/utils'
+import { formatSGD } from '@/lib/formulas'
 
-// Mock current formula data
+// Current LAB eBantu formula configuration - based on official logic
 const currentFormulas = {
   nafkahIddah: {
-    baseRate: 0.22,
-    incomeThresholds: [
-      { min: 0, max: 2000, multiplier: 0.18 },
-      { min: 2001, max: 4000, multiplier: 0.22 },
-      { min: 4001, max: 6000, multiplier: 0.25 },
-      { min: 6001, max: Infinity, multiplier: 0.28 }
-    ],
+    coefficient: 0.14,
+    base: 47,
+    lowerOffset: -3,
+    upperOffset: 197,
+    rounding: 'nearest_hundred',
+    description: 'Wife Maintenance (Monthly)',
+    formula: '0.14 × salary + 47',
     lastUpdated: '2024-01-15',
-    casesUsed: 1247
+    casesUsed: 1247,
+    thresholds: [
+      { min: 0, max: 1000, note: 'Low income bracket' },
+      { min: 1001, max: 2500, note: 'Standard calculation' },
+      { min: 2501, max: 4000, note: 'Upper middle income' },
+      { min: 4001, max: Infinity, note: 'High income - refer to legal advice' }
+    ]
   },
   mutaah: {
-    baseRate: 15,
-    marriageDurationFactors: [
-      { minMonths: 0, maxMonths: 12, multiplier: 0.8 },
-      { minMonths: 13, maxMonths: 36, multiplier: 1.0 },
-      { minMonths: 37, maxMonths: 72, multiplier: 1.2 },
-      { minMonths: 73, maxMonths: Infinity, multiplier: 1.4 }
-    ],
+    coefficient: 0.00096,
+    base: 0.85,
+    lowerOffset: -0.15,
+    upperOffset: 1.85,
+    rounding: 'nearest_integer',
+    description: 'Consolatory Gift (Daily)',
+    formula: '0.00096 × salary + 0.85',
     lastUpdated: '2024-01-15',
-    casesUsed: 892
+    casesUsed: 892,
+    thresholds: [
+      { min: 0, max: 1000, note: 'Low income bracket' },
+      { min: 1001, max: 2500, note: 'Standard calculation' },
+      { min: 2501, max: 4000, note: 'Upper middle income' },
+      { min: 4001, max: Infinity, note: 'High income - refer to legal advice' }
+    ]
   }
 }
 
@@ -58,9 +70,17 @@ export default function FormulasPage() {
   }
 
   const executeRecalibration = () => {
-    // Simulate recalibration process
-    alert('Formula recalibration initiated. This process will take 5-10 minutes.')
-    setShowRecalibrationModal(false)
+    // In production, this would trigger the actual recalibration process
+    // For hackathon demo, show success message
+    const confirmRecalibration = window.confirm(
+      'Are you sure you want to recalibrate the formulas? This will update the eBantu calculations based on recent case data.'
+    )
+    
+    if (confirmRecalibration) {
+      // Simulate successful recalibration
+      setShowRecalibrationModal(false)
+      // In production, redirect to a status page or show toast notification
+    }
   }
 
   return (
@@ -168,23 +188,23 @@ export default function FormulasPage() {
 
               <div className="space-y-4">
                 <div>
-                  <div className="text-sm font-medium text-gray-700 mb-2">Base Rate</div>
-                  <div className="text-2xl font-bold text-blue-600">
-                    {Math.round(currentFormulas.nafkahIddah.baseRate * 100)}%
+                  <div className="text-sm font-medium text-gray-700 mb-2">Current Formula</div>
+                  <div className="text-lg font-bold text-blue-600">
+                    {currentFormulas.nafkahIddah.formula}
                   </div>
-                  <div className="text-xs text-gray-500">of monthly income</div>
+                  <div className="text-xs text-gray-500">{currentFormulas.nafkahIddah.description}</div>
                 </div>
 
                 <div>
-                  <div className="text-sm font-medium text-gray-700 mb-3">Income Thresholds</div>
+                  <div className="text-sm font-medium text-gray-700 mb-3">Salary Thresholds</div>
                   <div className="space-y-2">
-                    {currentFormulas.nafkahIddah.incomeThresholds.map((threshold, index) => (
+                    {currentFormulas.nafkahIddah.thresholds.map((threshold, index) => (
                       <div key={index} className="flex justify-between items-center py-2 px-3 bg-gray-50 rounded">
                         <span className="text-sm text-gray-700">
-                          {formatCurrency(threshold.min)} - {threshold.max === Infinity ? '∞' : formatCurrency(threshold.max)}
+                          {formatSGD(threshold.min)} - {threshold.max === Infinity ? '∞' : formatSGD(threshold.max)}
                         </span>
                         <span className="text-sm font-medium text-blue-600">
-                          {Math.round(threshold.multiplier * 100)}%
+                          {threshold.note}
                         </span>
                       </div>
                     ))}
@@ -216,25 +236,25 @@ export default function FormulasPage() {
                 </span>
               </div>
 
-              <div className="space-y-4">
+                            <div className="space-y-4">
                 <div>
-                  <div className="text-sm font-medium text-gray-700 mb-2">Base Rate</div>
-                  <div className="text-2xl font-bold text-blue-600">
-                    {formatCurrency(currentFormulas.mutaah.baseRate)}
+                  <div className="text-sm font-medium text-gray-700 mb-2">Current Formula</div>
+                  <div className="text-lg font-bold text-green-600">
+                    {currentFormulas.mutaah.formula}
                   </div>
-                  <div className="text-xs text-gray-500">per day</div>
+                  <div className="text-xs text-gray-500">{currentFormulas.mutaah.description}</div>
                 </div>
 
                 <div>
-                  <div className="text-sm font-medium text-gray-700 mb-3">Marriage Duration Factors</div>
+                  <div className="text-sm font-medium text-gray-700 mb-3">Salary Thresholds</div>
                   <div className="space-y-2">
-                    {currentFormulas.mutaah.marriageDurationFactors.map((factor, index) => (
+                    {currentFormulas.mutaah.thresholds.map((threshold, index) => (
                       <div key={index} className="flex justify-between items-center py-2 px-3 bg-gray-50 rounded">
                         <span className="text-sm text-gray-700">
-                          {factor.minMonths} - {factor.maxMonths === Infinity ? '∞' : factor.maxMonths} months
+                          {formatSGD(threshold.min)} - {threshold.max === Infinity ? '∞' : formatSGD(threshold.max)}
                         </span>
-                        <span className="text-sm font-medium text-blue-600">
-                          {factor.multiplier}x
+                        <span className="text-sm font-medium text-green-600">
+                          {threshold.note}
                         </span>
                       </div>
                     ))}
@@ -294,9 +314,9 @@ export default function FormulasPage() {
                 </h3>
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Current Base Rate:</span>
+                    <span className="text-sm text-gray-600">Current Coefficient:</span>
                     <span className="font-medium">
-                      {Math.round(currentFormulas.nafkahIddah.baseRate * 100)}%
+                      {currentFormulas.nafkahIddah.coefficient}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
@@ -326,15 +346,15 @@ export default function FormulasPage() {
                 </h3>
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Current Base Rate:</span>
+                    <span className="text-sm text-gray-600">Current Coefficient:</span>
                     <span className="font-medium">
-                      {formatCurrency(currentFormulas.mutaah.baseRate)}
+                      {currentFormulas.mutaah.coefficient}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-gray-600">Recommended Rate:</span>
                     <span className="font-medium text-blue-600">
-                      {formatCurrency(pendingRecalibration.recommendedChanges.mutaah.newBaseRate)}
+                      {formatSGD(pendingRecalibration.recommendedChanges.mutaah.newBaseRate)}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">

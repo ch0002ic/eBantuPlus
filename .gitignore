@@ -85,3 +85,13 @@ secrets/
 
 # logs
 *.log
+
+# Development files
+VIOLATIONS_AUDIT.md
+*.audit
+*.notes
+
+# AI/ML Models (if any)
+models/
+*.pkl
+*.joblib
