@@ -3,101 +3,37 @@
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
 
-// Enhanced case data with more realistic information
-const enhancedCaseData = [
-  {
-    id: 'SYC2025001',
-    title: '[2025] SGHCF 001 - Lathibaby Bevi v Abdul Mustapha',
-    caseNumber: 'SYC2025001',
-    status: 'validated' as const,
-    uploadedAt: '2 hours ago',
-    uploadedBy: 'LAB Officer Rahman',
-    extractedData: {
-      husbandIncome: 3500,
-      nafkahIddah: 537,
-      mutaah: 4,
-      marriageDuration: 8,
-      confidence: 0.95
-    },
-    extractedText: 'Reference: Similar to [1996] SGHC 260 Lathibaby Bevi v Abdul Mustapha. Husband monthly salary $3,500. Court awarded nafkah iddah $537 for 3 months pursuant to s.113 Women\'s Charter...',
-    originalDocument: 'SYC2025001_judgment.pdf',
-    pdfContent: {
-      fileName: 'SYC2025001_Judgment.pdf',
-      uploadDate: new Date('2025-09-13T08:00:00'),
-      fileSize: '2.3 MB',
-      pageCount: 12,
-      fullText: 'SYARIAH COURT JUDGMENT - Case No: SYC2025001 - Between LATHIBABY BEVI and ABDUL MUSTAPHA BIN HASSAN...',
-      keyExtracts: {
-        parties: ['LATHIBABY BEVI (Plaintiff)', 'ABDUL MUSTAPHA BIN HASSAN (Defendant)'],
-        courtDetails: 'Syariah Court of Singapore - Case No: SYC2025001',
-        financialInfo: ['Defendant monthly income: $3,500', 'Employment: Singapore Technologies Engineering Ltd'],
-        awards: ['Nafkah iddah: $537 per month for 3 months', 'Mutaah: $4 per day']
-      }
-    }
-  },
-  {
-    id: 'SYC2025002',
-    title: '[2025] SGHCF 002 - Muhd Munir v Noor Hidah',
-    caseNumber: 'SYC2025002',
-    status: 'pending' as const,
-    uploadedAt: '4 hours ago',
-    uploadedBy: 'LAB Officer Siti',
-    extractedData: {
-      husbandIncome: 4200,
-      nafkahIddah: 635,
-      mutaah: 4,
-      marriageDuration: 10,
-      confidence: 0.87
-    },
-    extractedText: 'Reference: [1990] SGHC 78 Muhd Munir v Noor Hidah. Husband income $4,200 monthly. Nafkah iddah awarded $635 pursuant to established precedent...',
-    originalDocument: 'SYC2025002_judgment.pdf',
-    pdfContent: {
-      fileName: 'SYC2025002_Application.pdf',
-      uploadDate: new Date('2025-09-13T10:30:00'),
-      fileSize: '1.8 MB',
-      pageCount: 8,
-      fullText: 'SYARIAH COURT APPLICATION - Application No: SYC2025002 - MUHD MUNIR BIN ABDULLAH v NOOR HIDAH BTE SALLEH...',
-      keyExtracts: {
-        parties: ['MUHD MUNIR BIN ABDULLAH (Applicant)', 'NOOR HIDAH BTE SALLEH (Respondent)'],
-        courtDetails: 'Syariah Court of Singapore - Application No: SYC2025002',
-        financialInfo: ['Applicant monthly salary: $4,200', 'Employment: DBS Bank Limited'],
-        awards: ['Sought nafkah iddah: $635 per month', 'Sought mutaah: $4 per day']
-      }
-    }
-  },
-  {
-    id: 'SYC2025003',
-    title: '[2025] SGHCF 003 - Salijah bte Ab Latef v Mohd Irwan',
-    caseNumber: 'SYC2025003',
-    status: 'processing' as const,
-    uploadedAt: '6 hours ago',
-    uploadedBy: 'LAB Officer Ahmad',
-    extractedData: {
-      husbandIncome: 2800,
-      nafkahIddah: 439,
-      mutaah: 4,
-      marriageDuration: 5,
-      confidence: 0.91
-    },
-    extractedText: 'Reference: [1996] SGCA 32 Salijah bte Ab Latef v Mohd Irwan bin Abdullah Teo. Husband salary $2,800. Court consideration of s.114 factors...',
-    originalDocument: 'SYC2025003_judgment.pdf',
-    pdfContent: {
-      fileName: 'SYC2025003_Document.pdf',
-      uploadDate: new Date('2025-09-13T12:15:00'),
-      fileSize: '1.4 MB',
-      pageCount: 6,
-      fullText: 'SYARIAH COURT DOCUMENT - Case No: SYC2025003 - SALIJAH BTE AB LATEF v MOHD IRWAN BIN ABDULLAH TEO...',
-      keyExtracts: {
-        parties: ['SALIJAH BTE AB LATEF', 'MOHD IRWAN BIN ABDULLAH TEO'],
-        courtDetails: 'Syariah Court of Singapore - Case No: SYC2025003',
-        financialInfo: ['Husband salary: $2,800', 'Marriage duration: 5 years'],
-        awards: ['Under court consideration', 'Section 114 factors being evaluated']
-      }
+// Type definition for case data structure
+type CaseData = {
+  id: string
+  title: string
+  caseNumber: string
+  status: 'validated' | 'pending' | 'processing' | 'extracted'
+  uploadedAt: string
+  uploadedBy: string
+  extractedData: {
+    husbandIncome: number
+    nafkahIddah: number
+    mutaah: number
+    marriageDuration: number
+    confidence: number
+  }
+  extractedText: string
+  originalDocument: string
+  pdfContent: {
+    fileName: string
+    uploadDate: Date
+    fileSize: string
+    pageCount: number
+    fullText: string
+    keyExtracts: {
+      parties: string[]
+      courtDetails: string
+      financialInfo: string[]
+      awards: string[]
     }
   }
-]
-
-type CaseData = typeof enhancedCaseData[0]
+}
 
 export default function Dashboard() {
   const [cases, setCases] = useState<CaseData[]>([])
@@ -201,13 +137,13 @@ export default function Dashboard() {
           setCases(transformedCases)
         } else {
           console.error('Failed to fetch cases:', result.error)
-          // Fall back to static data
-          setCases(enhancedCaseData)
+          // Show empty state when API fails
+          setCases([])
         }
       } catch (error) {
         console.error('Error fetching cases:', error)
-        // Fall back to static data
-        setCases(enhancedCaseData)
+        // Show empty state when fetch fails
+        setCases([])
       } finally {
         setIsLoading(false)
       }
@@ -283,6 +219,43 @@ export default function Dashboard() {
     setViewMode('list')
     setSelectedCase(null)
     setEditFormData({})
+  }
+
+  const handleDeleteCase = async (caseId: string) => {
+    const confirmDelete = window.confirm('Are you sure you want to delete this case? This action cannot be undone.')
+    
+    if (!confirmDelete) return
+
+    try {
+      const response = await fetch(`/api/cases/${caseId}`, {
+        method: 'DELETE',
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        // Remove case from local state
+        setCases(prev => prev.filter(c => c.id !== caseId))
+        
+        setActionFeedback({
+          type: 'success',
+          message: 'Case deleted successfully'
+        })
+      } else {
+        setActionFeedback({
+          type: 'error',
+          message: result.message || 'Failed to delete case'
+        })
+      }
+    } catch (error) {
+      console.error('Error deleting case:', error)
+      setActionFeedback({
+        type: 'error',
+        message: 'Failed to delete case'
+      })
+    }
+
+    setTimeout(() => setActionFeedback(null), 3000)
   }
 
   return (
@@ -402,6 +375,7 @@ export default function Dashboard() {
                   onView={handleViewCase}
                   onEdit={handleEditCase}
                   onValidate={(id: string) => handleValidateCase(id, 'approve')}
+                  onDelete={handleDeleteCase}
                 />
               ))}
             </div>
@@ -500,9 +474,10 @@ interface CaseRowProps {
   onView: (caseData: CaseData) => void
   onEdit: (caseData: CaseData) => void
   onValidate: (id: string) => void
+  onDelete: (id: string) => void
 }
 
-function CaseRow({ caseData, onView, onEdit, onValidate }: CaseRowProps) {
+function CaseRow({ caseData, onView, onEdit, onValidate, onDelete }: CaseRowProps) {
   const statusColors = {
     validated: 'bg-green-100 text-green-800',
     pending: 'bg-yellow-100 text-yellow-800',
@@ -576,6 +551,15 @@ function CaseRow({ caseData, onView, onEdit, onValidate }: CaseRowProps) {
               Validate
             </button>
           )}
+          <button
+            onClick={() => onDelete(caseData.id)}
+            className="px-3 py-1 text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors flex items-center gap-1"
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            Delete
+          </button>
         </div>
       </div>
     </div>

@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
       data: {
         title,
         caseNumber: caseNumber || null,
-        fileUrl: `/uploads/${processedDocument.fileName}`, // TODO: Replace with actual file storage URL
+        fileUrl: `/uploads/${processedDocument.fileName}`, // Demo file storage path
         fileName: processedDocument.fileName,
         fileSize: processedDocument.fileSize,
         status: 'EXTRACTED',

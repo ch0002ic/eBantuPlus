@@ -188,94 +188,10 @@ export default function ValidationDashboard({
   const [rejectedDocuments, setRejectedDocuments] = useState<Set<string>>(new Set())
   const [actionFeedback, setActionFeedback] = useState<{ type: 'success' | 'error', message: string } | null>(null)
 
-  // Mock documents if none provided
-  const mockDocuments: ProcessedDocument[] = documents.length > 0 ? documents : [
-    {
-      id: 'doc_1',
-      fileName: 'syariah-court-order-001.pdf',
-      fileType: 'pdf',
-      fileSize: 245760,
-      uploadedAt: new Date('2024-01-15T10:30:00Z'),
-      processedAt: new Date('2024-01-15T10:31:30Z'),
-      status: 'completed',
-      extractedData: {
-        caseNumber: 'SYC2024/1234',
-        husbandName: 'Abdul Rahman bin Ahmad',
-        wifeName: 'Siti Fatimah bte Mohamed',
-        husbandIncome: 2800,
-        nafkahIddahAmount: 439,
-        mutaahAmount: 2.69,
-        marriageDuration: 8.5,
-        documentType: 'judgment',
-        isConsentOrder: false,
-        containsFinancialData: true
-      },
-      confidence: {
-        overall: 0.92,
-        extraction: 0.95,
-        entityRecognition: 0.90,
-        templateMatching: 0.94,
-        dataValidation: 0.96
-      },
-      validationFlags: [
-        {
-          type: 'info',
-          field: 'marriageDuration',
-          message: 'Marriage duration calculated from available dates',
-          severity: 'low',
-          autoFixable: false
-        }
-      ],
-      metadata: { pages: 3, template: 'syariah_court_order' }
-    },
-    {
-      id: 'doc_2',
-      fileName: 'consent-order-002.pdf',
-      fileType: 'pdf',
-      fileSize: 186432,
-      uploadedAt: new Date('2024-01-15T11:15:00Z'),
-      processedAt: new Date('2024-01-15T11:16:45Z'),
-      status: 'completed',
-      extractedData: {
-        caseNumber: 'SYC2024/1235',
-        husbandName: 'Mohamed Ali bin Hassan',
-        wifeName: 'Aminah bte Abdullah',
-        husbandIncome: 3200,
-        nafkahIddahAmount: 495,
-        mutaahAmount: 3.92,
-        marriageDuration: 12.0,
-        documentType: 'consent_order',
-        isConsentOrder: true,
-        containsFinancialData: true
-      },
-      confidence: {
-        overall: 0.78,
-        extraction: 0.82,
-        entityRecognition: 0.75,
-        templateMatching: 0.80,
-        dataValidation: 0.72
-      },
-      validationFlags: [
-        {
-          type: 'warning',
-          field: 'isConsentOrder',
-          message: 'Consent order detected - review for formula calculation exclusion',
-          severity: 'medium',
-          autoFixable: false
-        },
-        {
-          type: 'error',
-          field: 'nafkahIddahAmount',
-          message: 'Amount deviates significantly from LAB formula',
-          severity: 'high',
-          autoFixable: true
-        }
-      ],
-      metadata: { pages: 2, template: 'consent_order' }
-    }
-  ]
+  // Use provided documents or empty array
+  const documentsToShow: ProcessedDocument[] = documents
 
-  const filteredDocuments = mockDocuments.filter(doc => {
+  const filteredDocuments = documentsToShow.filter(doc => {
     // Income threshold filtering
     const husbandIncome = doc.extractedData.husbandIncome as number || 0
     if (husbandIncome > incomeThreshold) return false
@@ -415,8 +331,8 @@ export default function ValidationDashboard({
       <div className="border-b border-gray-200">
         <nav className="-mb-px flex space-x-8">
           {[
-            { key: 'all', label: 'All Documents', count: mockDocuments.length },
-            { key: 'pending', label: 'Pending Review', count: mockDocuments.filter(d => !approvedDocuments.has(d.id) && !rejectedDocuments.has(d.id)).length },
+            { key: 'all', label: 'All Documents', count: documentsToShow.length },
+            { key: 'pending', label: 'Pending Review', count: documentsToShow.filter(d => !approvedDocuments.has(d.id) && !rejectedDocuments.has(d.id)).length },
             { key: 'approved', label: 'Approved', count: approvedDocuments.size },
             { key: 'rejected', label: 'Rejected', count: rejectedDocuments.size }
           ].map(tab => (

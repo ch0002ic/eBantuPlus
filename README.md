@@ -1,4 +1,4 @@
-# 🏆 eBantu+ Legal Aid Automation Platform
+# eBantu+ Legal Aid Automation Platform
 
 **AI-powered legal automation tool for Singapore's Legal Aid Bureau (LAB) to automate nafkah iddah and mutaah formula updates from Syariah Court cases.**
 
@@ -6,21 +6,14 @@
 
 ## 🎯 Project Overview
 
-**Team:** HashBill  
-**Event:** SMU LIT Hackathon 2025  
-**Challenge:** LAB eBantu Formula Updater  
-**Status:** 🟢 **PRODUCTION READY - HACKATHON DEMO**
-
 eBantu+ revolutionizes the manual process of updating legal calculation formulas by leveraging cutting-edge AI to:
-- ✅ Extract financial data from Syariah Court case documents
-- ✅ Validate data through human-in-the-loop workflows  
-- ✅ Automatically recalibrate nafkah iddah and mutaah formulas
-- ✅ Integrate seamlessly with the existing eBantu tool
-- ✅ Implement **exact LAB formula specifications** with precision
+- Extract financial data from Syariah Court case documents
+- Validate data through human-in-the-loop workflows  
+- Automatically recalibrate nafkah iddah and mutaah formulas
+- Integrate seamlessly with the existing eBantu tool
+- Implement **exact LAB formula specifications** with precision
 
----
-
-## 🚀 **Core Innovation: Exact LAB Formula Implementation**
+## 🚀 **Core Innovation: LAB Formula Implementation**
 
 ### **Official LAB eBantu Formulas**
 
@@ -44,17 +37,13 @@ Amount = 0.00096 × salary + 0.85
 
 **Special Handling:** Salary threshold at $4,000 with judicial discretion for high earners
 
----
-
 ## 🏗️ **Technical Architecture**
 
 ### **5-Layer AI-Powered Legal Automation System**
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                     eBantu+ Architecture                        │
-│                   Team HashBill - 2025                         │
-└─────────────────────────────────────────────────────────────────┘
+eBantu+ Architecture
+```
 
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
 │   LawNet    │    │ Document    │    │ Validation  │    │  Formula    │
@@ -70,14 +59,12 @@ Amount = 0.00096 × salary + 0.85
 ```
 
 ### **Technology Stack**
-- **Frontend:** Next.js 14 with TypeScript
+- **Frontend:** Next.js 15 with TypeScript
 - **AI Engine:** OpenAI GPT-4 with legal prompt engineering
 - **Database:** Neon PostgreSQL (Singapore region)
 - **Legal Integration:** LawNet 4.0 GPT-Legal model
 - **Deployment:** Vercel with serverless functions
 - **Security:** End-to-end encryption, audit trails
-
----
 
 ## ✨ **Key Features**
 
@@ -114,52 +101,19 @@ Amount = 0.00096 × salary + 0.85
 - 🔄 Backward compatibility
 - 📊 Monitoring and analytics
 
----
-
-## 🎪 **Live Demo Workflow**
-
-### **Scenario: Q3 2025 Formula Update**
-
-**Step 1: Document Upload (2 minutes)**
-- Upload 10 recent Syariah Court judgments
-- AI extracts financial data with 95% accuracy
-- Real-time confidence scoring and validation
-
-**Step 2: Human Validation (3 minutes)**
-- LAB officer reviews extracted data
-- Corrects edge cases and validates amounts
-- Approves high-confidence extractions
-
-**Step 3: Formula Recalibration (2 minutes)**
-- Statistical analysis of validated cases
-- Generate new formula coefficients
-- Compare with existing formulas
-
-**Step 4: eBantu Integration (1 minute)**
-- Deploy updated formulas to eBantu
-- Real-time testing with sample cases
-- Monitoring dashboard activation
-
-**Step 5: Impact Demonstration (2 minutes)**
-- Before/after comparison
-- Accuracy improvements
-- Time savings quantification
-
----
-
 ## 🚀 **Getting Started**
 
 ### **Prerequisites**
 - Node.js 18+ 
 - PostgreSQL database
 - OpenAI API key
-- LawNet 4.0 access (optional for demo)
+- LawNet 4.0 access (optional for full features)
 
 ### **Quick Setup**
 ```bash
 # Clone repository
-git clone https://github.com/team-hashbill/ebantu-plus.git
-cd ebantu-plus
+git clone https://github.com/ch0002ic/eBantuPlus.git
+cd eBantuPlus
 
 # Install dependencies
 npm install
@@ -183,52 +137,25 @@ OPENAI_API_KEY=your_openai_key
 DATABASE_URL=your_postgresql_url
 NEXTAUTH_SECRET=your_auth_secret
 
-# Optional for Full Demo
+# Optional for Full Features
 LAWNET_API_KEY=your_lawnet_key
 VERCEL_BLOB_READ_WRITE_TOKEN=your_blob_token
 ```
 
----
+## 📊 **Impact & Benefits**
 
-## 📊 **Hackathon Demo Impact**
-
-### **🎯 Problem Solved**
 LAB's manual formula update process that previously took **weeks** is now automated to **minutes** with:
 - **95% accuracy** in data extraction
 - **80% time reduction** in processing
 - **100% audit compliance** with detailed trails
 - **Zero manual errors** in formula calculations
 
-### **💡 Innovation Highlights**
-1. **Singapore-First Integration** - First LawNet 4.0 GPT-Legal implementation
+### **Innovation Highlights**
+1. **LawNet 4.0 Integration** - Advanced legal case discovery and analysis
 2. **Production-Ready Architecture** - Enterprise-grade security and scalability
 3. **Exact LAB Compliance** - Precise formula implementation with business rules
 4. **Human-AI Collaboration** - Optimal balance of automation and validation
-5. **Scalable Template** - Framework for broader legal automation initiatives
-
-### **🏆 Judging Criteria Alignment**
-
-**Technical Excellence** ⭐⭐⭐⭐⭐
-- Advanced AI integration with legal domain expertise
-- Production-ready Next.js architecture
-- Comprehensive error handling and validation
-
-**Innovation Impact** ⭐⭐⭐⭐⭐
-- Revolutionary automation for manual legal processes
-- Singapore's first LawNet 4.0 hackathon integration
-- Template for broader legal tech transformation
-
-**Real-World Application** ⭐⭐⭐⭐⭐
-- Direct LAB operational improvement
-- Immediate deployment capability
-- Measurable time and accuracy benefits
-
-**Scalability & Sustainability** ⭐⭐⭐⭐⭐
-- Government-ready enterprise architecture
-- Template for Family Court maintenance calculations
-- Foundation for Singapore legal automation ecosystem
-
----
+5. **Scalable Framework** - Template for broader legal automation initiatives
 
 ## 🔧 **Project Structure**
 
@@ -339,7 +266,7 @@ docker run -p 3000:3000 --env-file .env ebantu-plus
 
 ## 🛣️ **Roadmap**
 
-### **Phase 1: MVP (Hackathon)** ✅
+### **Phase 1: MVP** ✅
 - ✅ Core document processing
 - ✅ Exact LAB formula implementation  
 - ✅ Human validation workflows
@@ -357,28 +284,11 @@ docker run -p 3000:3000 --env-file .env ebantu-plus
 - 🔄 Multi-language support
 - 🔄 Regional legal system adaptation
 
----
+## � **License & Disclaimer**
 
-## 👥 **Team HashBill**
-
-**Developed for SMU LIT Hackathon 2025**
-
-A passionate team of developers, legal tech enthusiasts, and AI specialists dedicated to transforming Singapore's legal landscape through intelligent automation.
-
-**Contact:** team@hashbill.tech  
-**Demo:** [https://ebantu-plus.vercel.app](https://ebantu-plus.vercel.app)
-
----
-
-## 📜 **License & Disclaimer**
-
-This project is developed for educational and demonstration purposes as part of the SMU LIT Hackathon 2025. 
+This application provides computational assistance for legal calculations. All results should be reviewed by qualified legal professionals before implementation.
 
 For production deployment with LAB, please contact the development team for licensing and implementation support.
-
-**⚖️ Legal Notice:** This application provides computational assistance for legal calculations. All results should be reviewed by qualified legal professionals before implementation.
-
----
 
 ## 🤝 **Contributing**
 
@@ -392,8 +302,7 @@ We welcome contributions to enhance eBantu+ capabilities:
 
 ---
 
-**🏆 Team HashBill | SMU LIT Hackathon 2025**  
+**eBantu+ Legal Aid Automation Platform**  
 *Transforming Legal Aid Through Intelligent Automation*
 
-**Live Demo:** [Vercel Deployment](https://ebantu-plus.vercel.app)  
-**Repository:** [GitHub](https://github.com/team-hashbill/ebantu-plus)
+**Repository:** [GitHub](https://github.com/ch0002ic/eBantuPlus)
