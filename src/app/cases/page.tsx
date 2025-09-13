@@ -19,6 +19,19 @@ type CaseData = {
   extractedText: string
   marriageDuration: number
   exclusionReason: string | null
+  pdfContent?: {
+    fileName: string
+    uploadDate: Date
+    fileSize: string
+    pageCount: number
+    fullText: string
+    keyExtracts: {
+      parties: string[]
+      courtDetails: string
+      financialInfo: string[]
+      awards: string[]
+    }
+  }
 }
 
 type EditHistoryItem = {
@@ -46,7 +59,56 @@ const realisticCaseData: CaseData[] = [
     uploadedBy: { name: 'LAB Officer Rahman' },
     extractedText: 'Reference: Similar to [1996] SGHC 260 Lathibaby Bevi v Abdul Mustapha. Husband monthly salary $3,500. Court awarded nafkah iddah $537 for 3 months pursuant to s.113 Women\'s Charter...',
     marriageDuration: 8,
-    exclusionReason: null
+    exclusionReason: null,
+    pdfContent: {
+      fileName: 'SYC2025001_Judgment.pdf',
+      uploadDate: new Date('2025-09-13T08:00:00'),
+      fileSize: '2.3 MB',
+      pageCount: 12,
+      fullText: `IN THE SYARIAH COURT OF SINGAPORE
+      
+Case No: SYC2025001
+Between: LATHIBABY BEVI (Plaintiff) and ABDUL MUSTAPHA BIN HASSAN (Defendant)
+
+JUDGMENT
+
+1. BACKGROUND
+The parties were married on 15th March 2017 and have been married for approximately 8 years. The plaintiff seeks dissolution of marriage and financial relief pursuant to sections 113 and 114 of the Women's Charter (Cap. 353).
+
+2. FINANCIAL CIRCUMSTANCES
+The defendant's monthly income is established at $3,500 based on his employment with Singapore Technologies Engineering Ltd. The court has considered the parties' standard of living during the marriage and the plaintiff's reasonable needs during the iddah period.
+
+3. NAFKAH IDDAH
+Having regard to the provisions of section 113 of the Women's Charter and the guidelines established in previous cases including [1996] SGHC 260 Lathibaby Bevi v Abdul Mustapha, the court awards nafkah iddah in the sum of $537 per month for a period of 3 months.
+
+4. MUTAAH
+The court awards mutaah in the sum of $4 per day, being compensation for the dissolution of marriage as provided under Islamic law and in accordance with established precedents.
+
+5. ORDERS
+The court hereby orders:
+(a) The marriage between the parties is dissolved
+(b) The defendant shall pay nafkah iddah of $537 per month for 3 months
+(c) The defendant shall pay mutaah of $4 per day
+(d) Costs reserved
+
+Dated this 13th day of September 2025
+[Signature]
+Judge of the Syariah Court`,
+      keyExtracts: {
+        parties: ['LATHIBABY BEVI (Plaintiff)', 'ABDUL MUSTAPHA BIN HASSAN (Defendant)'],
+        courtDetails: 'Syariah Court of Singapore - Case No: SYC2025001',
+        financialInfo: [
+          'Defendant monthly income: $3,500',
+          'Employment: Singapore Technologies Engineering Ltd',
+          'Marriage duration: 8 years'
+        ],
+        awards: [
+          'Nafkah iddah: $537 per month for 3 months',
+          'Mutaah: $4 per day',
+          'Legal basis: Sections 113 and 114 Women\'s Charter'
+        ]
+      }
+    }
   },
   {
     id: '2',
@@ -61,7 +123,60 @@ const realisticCaseData: CaseData[] = [
     uploadedBy: { name: 'LAB Officer Siti' },
     extractedText: 'Reference: [1990] SGHC 78 Muhd Munir v Noor Hidah. Husband income $2,800 monthly. Nafkah iddah awarded $439 pursuant to established precedent...',
     marriageDuration: 5,
-    exclusionReason: null
+    exclusionReason: null,
+    pdfContent: {
+      fileName: 'SYC2025002_Application.pdf',
+      uploadDate: new Date('2025-09-13T10:30:00'),
+      fileSize: '1.8 MB',
+      pageCount: 8,
+      fullText: `SYARIAH COURT OF SINGAPORE
+      
+Application No: SYC2025002
+MUHD MUNIR BIN ABDULLAH (Applicant) v NOOR HIDAH BTE SALLEH (Respondent)
+
+APPLICATION FOR MAINTENANCE
+
+1. PARTIES
+The Applicant and Respondent were married on 22nd June 2020 and have been married for approximately 5 years. The marriage has broken down irretrievably.
+
+2. APPLICANT'S CIRCUMSTANCES  
+The Applicant is employed as a Senior Executive with DBS Bank Limited earning a monthly salary of $2,800. He has been consistently employed for the past 7 years.
+
+3. RESPONDENT'S NEEDS
+The Respondent is currently unemployed and requires maintenance for her living expenses during the iddah period. She has no independent means of income.
+
+4. PRAYERS
+The Applicant seeks:
+(a) Dissolution of marriage
+(b) Payment of nafkah iddah of $439 per month for 3 months
+(c) Payment of mutaah of $4 per day
+(d) Such other relief as the Court deems fit
+
+SUPPORTING DOCUMENTS:
+- Employment contract and salary slips
+- Bank statements for past 6 months  
+- Marriage certificate
+- Identity cards of both parties
+
+Filed this 13th day of September 2025
+[Legal signature]
+Solicitor for Applicant`,
+      keyExtracts: {
+        parties: ['MUHD MUNIR BIN ABDULLAH (Applicant)', 'NOOR HIDAH BTE SALLEH (Respondent)'],
+        courtDetails: 'Syariah Court of Singapore - Application No: SYC2025002',
+        financialInfo: [
+          'Applicant monthly salary: $2,800',
+          'Employment: DBS Bank Limited (Senior Executive)',
+          'Marriage duration: 5 years',
+          'Respondent: Currently unemployed'
+        ],
+        awards: [
+          'Sought nafkah iddah: $439 per month for 3 months',
+          'Sought mutaah: $4 per day',
+          'Status: Application pending court decision'
+        ]
+      }
+    }
   },
   {
     id: '3',
@@ -483,6 +598,113 @@ export default function CasesPage() {
                   {selectedCase.extractedText}
                 </div>
               </div>
+
+              {/* PDF Document Content */}
+              {selectedCase.pdfContent && (
+                <div className="mt-6 bg-white border border-gray-200 rounded-lg">
+                  <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                    <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                      <svg className="w-5 h-5 mr-2 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
+                      </svg>
+                      PDF Document: {selectedCase.pdfContent.fileName}
+                    </h3>
+                    <div className="mt-2 flex flex-wrap gap-4 text-sm text-gray-600">
+                      <span>📅 Uploaded: {formatDateTime(selectedCase.pdfContent.uploadDate)}</span>
+                      <span>📄 {selectedCase.pdfContent.pageCount} pages</span>
+                      <span>💾 {selectedCase.pdfContent.fileSize}</span>
+                    </div>
+                  </div>
+
+                  <div className="p-6">
+                    {/* Key Extracts Summary */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                      {/* Parties */}
+                      <div className="bg-blue-50 rounded-lg p-4">
+                        <h4 className="font-semibold text-blue-900 mb-2 flex items-center">
+                          <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
+                          </svg>
+                          Parties
+                        </h4>
+                        <ul className="text-sm text-blue-800 space-y-1">
+                          {selectedCase.pdfContent.keyExtracts.parties.map((party, index) => (
+                            <li key={index}>• {party}</li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      {/* Court Details */}
+                      <div className="bg-green-50 rounded-lg p-4">
+                        <h4 className="font-semibold text-green-900 mb-2 flex items-center">
+                          <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.293l-3-3a1 1 0 00-1.414 1.414L10.586 9.5H7a1 1 0 100 2h3.586l-1.293 1.293a1 1 0 101.414 1.414l3-3a1 1 0 000-1.414z" clipRule="evenodd" />
+                          </svg>
+                          Court Details
+                        </h4>
+                        <p className="text-sm text-green-800">{selectedCase.pdfContent.keyExtracts.courtDetails}</p>
+                      </div>
+
+                      {/* Financial Information */}
+                      <div className="bg-yellow-50 rounded-lg p-4">
+                        <h4 className="font-semibold text-yellow-900 mb-2 flex items-center">
+                          <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M8.433 7.418c.155-.103.346-.196.567-.267v1.698a2.305 2.305 0 01-.567-.267C8.07 8.34 8 8.114 8 8c0-.114.07-.34.433-.582zM11 12.849v-1.698c.22.071.412.164.567.267.364.243.433.468.433.582 0 .114-.07.34-.433.582a2.305 2.305 0 01-.567.267z" />
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v.092a4.535 4.535 0 00-1.676.662C6.602 6.234 6 7.009 6 8c0 .99.602 1.765 1.324 2.246.48.32 1.054.545 1.676.662v1.941c-.391-.127-.68-.317-.843-.504a1 1 0 10-1.51 1.31c.562.649 1.413 1.076 2.353 1.253V15a1 1 0 102 0v-.092a4.535 4.535 0 001.676-.662C13.398 13.766 14 12.991 14 12c0-.99-.602-1.765-1.324-2.246A4.535 4.535 0 0011 9.092V7.151c.391.127.68.317.843.504a1 1 0 101.51-1.31c-.562-.649-1.413-1.076-2.353-1.253V5z" clipRule="evenodd" />
+                          </svg>
+                          Financial Information
+                        </h4>
+                        <ul className="text-sm text-yellow-800 space-y-1">
+                          {selectedCase.pdfContent.keyExtracts.financialInfo.map((info, index) => (
+                            <li key={index}>• {info}</li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      {/* Awards */}
+                      <div className="bg-purple-50 rounded-lg p-4">
+                        <h4 className="font-semibold text-purple-900 mb-2 flex items-center">
+                          <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                          </svg>
+                          Awards & Orders
+                        </h4>
+                        <ul className="text-sm text-purple-800 space-y-1">
+                          {selectedCase.pdfContent.keyExtracts.awards.map((award, index) => (
+                            <li key={index}>• {award}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+
+                    {/* Full Document Text */}
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-semibold text-gray-900">Full Document Text</h4>
+                        <button 
+                          className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                          onClick={() => {
+                            const element = document.createElement('a');
+                            const file = new Blob([selectedCase.pdfContent!.fullText], {type: 'text/plain'});
+                            element.href = URL.createObjectURL(file);
+                            element.download = `${selectedCase.caseNumber}_extracted_text.txt`;
+                            document.body.appendChild(element);
+                            element.click();
+                            document.body.removeChild(element);
+                          }}
+                        >
+                          📥 Download Text
+                        </button>
+                      </div>
+                      <div className="bg-white border rounded p-4 max-h-96 overflow-y-auto">
+                        <pre className="text-sm text-gray-700 whitespace-pre-wrap font-mono">
+                          {selectedCase.pdfContent.fullText}
+                        </pre>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Action Buttons */}
               <div className="mt-6 flex space-x-3">

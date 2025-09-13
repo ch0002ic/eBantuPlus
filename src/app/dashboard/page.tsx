@@ -20,7 +20,20 @@ const enhancedCaseData = [
       confidence: 0.95
     },
     extractedText: 'Reference: Similar to [1996] SGHC 260 Lathibaby Bevi v Abdul Mustapha. Husband monthly salary $3,500. Court awarded nafkah iddah $537 for 3 months pursuant to s.113 Women\'s Charter...',
-    originalDocument: 'SYC2025001_judgment.pdf'
+    originalDocument: 'SYC2025001_judgment.pdf',
+    pdfContent: {
+      fileName: 'SYC2025001_Judgment.pdf',
+      uploadDate: new Date('2025-09-13T08:00:00'),
+      fileSize: '2.3 MB',
+      pageCount: 12,
+      fullText: 'SYARIAH COURT JUDGMENT - Case No: SYC2025001 - Between LATHIBABY BEVI and ABDUL MUSTAPHA BIN HASSAN...',
+      keyExtracts: {
+        parties: ['LATHIBABY BEVI (Plaintiff)', 'ABDUL MUSTAPHA BIN HASSAN (Defendant)'],
+        courtDetails: 'Syariah Court of Singapore - Case No: SYC2025001',
+        financialInfo: ['Defendant monthly income: $3,500', 'Employment: Singapore Technologies Engineering Ltd'],
+        awards: ['Nafkah iddah: $537 per month for 3 months', 'Mutaah: $4 per day']
+      }
+    }
   },
   {
     id: 'SYC2025002',
@@ -37,7 +50,20 @@ const enhancedCaseData = [
       confidence: 0.87
     },
     extractedText: 'Reference: [1990] SGHC 78 Muhd Munir v Noor Hidah. Husband income $4,200 monthly. Nafkah iddah awarded $635 pursuant to established precedent...',
-    originalDocument: 'SYC2025002_judgment.pdf'
+    originalDocument: 'SYC2025002_judgment.pdf',
+    pdfContent: {
+      fileName: 'SYC2025002_Application.pdf',
+      uploadDate: new Date('2025-09-13T10:30:00'),
+      fileSize: '1.8 MB',
+      pageCount: 8,
+      fullText: 'SYARIAH COURT APPLICATION - Application No: SYC2025002 - MUHD MUNIR BIN ABDULLAH v NOOR HIDAH BTE SALLEH...',
+      keyExtracts: {
+        parties: ['MUHD MUNIR BIN ABDULLAH (Applicant)', 'NOOR HIDAH BTE SALLEH (Respondent)'],
+        courtDetails: 'Syariah Court of Singapore - Application No: SYC2025002',
+        financialInfo: ['Applicant monthly salary: $4,200', 'Employment: DBS Bank Limited'],
+        awards: ['Sought nafkah iddah: $635 per month', 'Sought mutaah: $4 per day']
+      }
+    }
   },
   {
     id: 'SYC2025003',
@@ -54,7 +80,20 @@ const enhancedCaseData = [
       confidence: 0.91
     },
     extractedText: 'Reference: [1996] SGCA 32 Salijah bte Ab Latef v Mohd Irwan bin Abdullah Teo. Husband salary $2,800. Court consideration of s.114 factors...',
-    originalDocument: 'SYC2025003_judgment.pdf'
+    originalDocument: 'SYC2025003_judgment.pdf',
+    pdfContent: {
+      fileName: 'SYC2025003_Document.pdf',
+      uploadDate: new Date('2025-09-13T12:15:00'),
+      fileSize: '1.4 MB',
+      pageCount: 6,
+      fullText: 'SYARIAH COURT DOCUMENT - Case No: SYC2025003 - SALIJAH BTE AB LATEF v MOHD IRWAN BIN ABDULLAH TEO...',
+      keyExtracts: {
+        parties: ['SALIJAH BTE AB LATEF', 'MOHD IRWAN BIN ABDULLAH TEO'],
+        courtDetails: 'Syariah Court of Singapore - Case No: SYC2025003',
+        financialInfo: ['Husband salary: $2,800', 'Marriage duration: 5 years'],
+        awards: ['Under court consideration', 'Section 114 factors being evaluated']
+      }
+    }
   }
 ]
 
@@ -80,11 +119,16 @@ export default function Dashboard() {
   }
 
   const handleValidateCase = (caseId: string, action: 'approve' | 'reject') => {
-    setCases(prev => prev.map(c => 
-      c.id === caseId 
-        ? { ...c, status: action === 'approve' ? 'validated' as const : 'pending' as const }
-        : c
-    ))
+    setCases(prev => prev.map(c => {
+      if (c.id === caseId) {
+        return { 
+          ...c, 
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          status: action === 'approve' ? 'validated' as any : 'pending' as any
+        }
+      }
+      return c
+    }))
     
     setActionFeedback({
       type: 'success',
@@ -325,7 +369,16 @@ function CaseRow({ caseData, onView, onEdit, onValidate }: CaseRowProps) {
         <div className="flex-1">
           <div className="flex items-center gap-3">
             <h4 className="text-sm font-medium text-gray-900">{caseData.title}</h4>
-            <div className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[caseData.status]}`}>
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+            {(caseData as any).pdfContent && (
+              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-red-100 text-red-800">
+                <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
+                </svg>
+                PDF
+              </span>
+            )}
+            <div className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[caseData.status as keyof typeof statusColors]}`}>
               {caseData.status.charAt(0).toUpperCase() + caseData.status.slice(1)}
             </div>
           </div>
@@ -470,6 +523,40 @@ function CaseDetailView({ caseData, isOpen, onClose, onEdit }: CaseDetailViewPro
               </p>
             </div>
           </div>
+
+          {/* PDF Document Information */}
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+          {(caseData as any).pdfContent && (
+            <div>
+              <h4 className="text-sm font-medium text-gray-900 mb-3 flex items-center">
+                <svg className="w-4 h-4 mr-2 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
+                </svg>
+                PDF Document
+              </h4>
+              <div className="bg-red-50 rounded-lg p-4 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-red-700">File:</span>
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                  <span className="font-medium text-red-900">{(caseData as any).pdfContent.fileName}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-red-700">Pages:</span>
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                  <span className="font-medium text-red-900">{(caseData as any).pdfContent.pageCount}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-red-700">Size:</span>
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                  <span className="font-medium text-red-900">{(caseData as any).pdfContent.fileSize}</span>
+                </div>
+                <div className="text-sm text-red-700">
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                  <span className="font-medium">Court:</span> {(caseData as any).pdfContent.keyExtracts.courtDetails}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="flex justify-end gap-3 p-6 border-t border-gray-200">
