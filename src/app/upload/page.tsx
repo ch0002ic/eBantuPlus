@@ -63,8 +63,13 @@ export default function UploadPage() {
       const result = await response.json()
       console.log('Document processed successfully:', result)
       
+      // Show success message and redirect with case info
+      if (result.case) {
+        alert(`✅ Document processed successfully!\nCase ID: ${result.case.id}\nTitle: ${result.case.title}\nStatus: ${result.case.status}`)
+      }
+      
       // Redirect to dashboard after successful upload
-      window.location.href = '/dashboard'
+      window.location.href = '/dashboard?refresh=true'
       
     } catch (error) {
       console.error('Upload error:', error)

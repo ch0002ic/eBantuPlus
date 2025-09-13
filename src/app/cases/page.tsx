@@ -267,13 +267,13 @@ export default function CasesPage() {
     const fetchCases = async () => {
       try {
         setIsLoading(true)
-        const response = await fetch('/api/cases/simple')
+        const response = await fetch('/api/cases?limit=100&offset=0')
         const result = await response.json()
         
         if (result.success) {
           // Map API data to match the expected format
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const mappedCases = result.data.map((caseItem: any) => ({
+          const mappedCases = result.data.cases.map((caseItem: any) => ({
             id: caseItem.id,
             title: caseItem.title,
             caseNumber: caseItem.caseNumber || caseItem.id,

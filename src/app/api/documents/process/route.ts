@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { documentProcessor } from '@/lib/document-processor'
 import { z } from 'zod'
-import { addCase } from '@/lib/cases-storage'
+import { prisma } from '@/lib/db'
 
 // Request validation schema
 const ProcessDocumentSchema = z.object({
@@ -77,60 +77,79 @@ export async function POST(request: NextRequest) {
     const title = formData.get('title') as string || processedDocument.fileName
     const caseNumber = formData.get('caseNumber') as string || ''
 
-    // Create case in storage
-    const newCase = addCase({
-      title,
-      caseNumber: caseNumber || undefined,
-      status: 'pending',
-      uploadedAt: 'Just now',
-      uploadedBy: 'LAB Officer',
-      extractedData: {
+    // Create or get default LAB officer user
+    let user = await prisma.user.findFirst({
+      where: { email: 'lab.officer@ebantu.sg' }
+    })
+    
+    if (!user) {
+      user = await prisma.user.create({
+        data: {
+          email: 'lab.officer@ebantu.sg',
+          name: 'LAB Officer',
+          role: 'LAB_OFFICER'
+        }
+      })
+    }
+
+    // Create case in database
+    const newCase = await prisma.case.create({
+      data: {
+        title,
+        caseNumber: caseNumber || null,
+        fileUrl: `/uploads/${processedDocument.fileName}`, // TODO: Replace with actual file storage URL
+        fileName: processedDocument.fileName,
+        fileSize: processedDocument.fileSize,
+        status: 'EXTRACTED',
         husbandIncome: processedDocument.extractedData.husbandIncome || null,
         nafkahIddah: processedDocument.extractedData.nafkahIddahAmount || null,
         mutaah: processedDocument.extractedData.mutaahAmount || null,
         marriageDuration: processedDocument.extractedData.marriageDuration || null,
-        confidence: processedDocument.confidence.overall
+        extractedText: `Case: ${processedDocument.extractedData.caseNumber || 'N/A'}\nHusband: ${processedDocument.extractedData.husbandName || 'N/A'}\nWife: ${processedDocument.extractedData.wifeName || 'N/A'}\nIncome: $${processedDocument.extractedData.husbandIncome || 0}\nNafkah Iddah: $${processedDocument.extractedData.nafkahIddahAmount || 0}\nMutaah: $${processedDocument.extractedData.mutaahAmount || 0}`,
+        aiExtraction: {
+          extractedData: processedDocument.extractedData,
+          metadata: processedDocument.metadata,
+          confidence: processedDocument.confidence,
+          validationFlags: processedDocument.validationFlags
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any,
+        confidence: processedDocument.confidence.overall,
+        isConsentOrder: processedDocument.extractedData.isConsentOrder || false,
+        isHighIncome: (processedDocument.extractedData.husbandIncome || 0) > 5000,
+        isOutlier: processedDocument.confidence.overall < 0.7,
+        uploadedById: user.id
       },
-      extractedText: 'Document processed successfully. Financial data extracted pending validation.',
-      originalDocument: processedDocument.fileName,
-      pdfContent: {
-        fileName: processedDocument.fileName,
-        uploadDate: new Date(),
-        fileSize: `${Math.round(processedDocument.fileSize / 1024)} KB`,
-        pageCount: processedDocument.metadata.pages || 1,
-        fullText: `Case: ${processedDocument.extractedData.caseNumber || 'N/A'}\nHusband: ${processedDocument.extractedData.husbandName || 'N/A'}\nWife: ${processedDocument.extractedData.wifeName || 'N/A'}\nIncome: $${processedDocument.extractedData.husbandIncome || 0}\nNafkah Iddah: $${processedDocument.extractedData.nafkahIddahAmount || 0}\nMutaah: $${processedDocument.extractedData.mutaahAmount || 0}`,
-        keyExtracts: {
-          parties: [
-            `${processedDocument.extractedData.husbandName || 'Processing...'} (Husband)`,
-            `${processedDocument.extractedData.wifeName || 'Processing...'} (Wife)`
-          ],
-          courtDetails: `${processedDocument.extractedData.courtType || 'Syariah Court'} - Case No: ${processedDocument.extractedData.caseNumber || 'Processing...'}`,
-          financialInfo: [
-            `Husband Income: $${processedDocument.extractedData.husbandIncome || 'Processing...'}`,
-            `Marriage Duration: ${processedDocument.extractedData.marriageDuration || 'Processing...'} years`
-          ],
-          awards: [
-            `Nafkah Iddah: $${processedDocument.extractedData.nafkahIddahAmount || 'Processing...'} per month`,
-            `Mutaah: $${processedDocument.extractedData.mutaahAmount || 'Processing...'}`
-          ]
+      include: {
+        uploadedBy: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
         }
       }
     })
 
-    console.log('Case created:', newCase.id)
+    console.log('Case created in database:', newCase.id)
 
-    // Return processed document with additional metadata
+        // Return processed document with additional metadata
     return NextResponse.json({
       success: true,
       document: {
         ...processedDocument,
         processingTime,
-        caseId: newCase.id,
         api: {
           version: '2.0',
           timestamp: new Date().toISOString(),
           processingNode: 'primary'
         }
+      },
+      case: {
+        id: newCase.id,
+        title: newCase.title,
+        caseNumber: newCase.caseNumber,
+        status: newCase.status,
+        uploadedBy: newCase.uploadedBy
       }
     })
 
