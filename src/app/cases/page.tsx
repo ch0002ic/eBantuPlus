@@ -102,12 +102,46 @@ const realisticCaseData = [
 export default function CasesPage() {
   const [filterStatus, setFilterStatus] = useState('ALL')
   const [searchTerm, setSearchTerm] = useState('')
+  const [incomeFilter, setIncomeFilter] = useState('ALL')
+  const [customMinIncome, setCustomMinIncome] = useState('')
+  const [customMaxIncome, setCustomMaxIncome] = useState('')
 
   const filteredCases = realisticCaseData.filter(caseItem => {
     const matchesStatus = filterStatus === 'ALL' || caseItem.status === filterStatus
     const matchesSearch = caseItem.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         caseItem.caseNumber?.toLowerCase().includes(searchTerm.toLowerCase())
-    return matchesStatus && matchesSearch
+                         caseItem.caseNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         caseItem.husbandIncome?.toString().includes(searchTerm) ||
+                         caseItem.extractedText?.toLowerCase().includes(searchTerm.toLowerCase())
+    
+    // Income filtering logic
+    let matchesIncome = true
+    if (incomeFilter !== 'ALL') {
+      const income = caseItem.husbandIncome || 0
+      switch (incomeFilter) {
+        case 'LOW':
+          matchesIncome = income <= 2500
+          break
+        case 'MEDIUM':
+          matchesIncome = income > 2500 && income <= 4000
+          break
+        case 'HIGH':
+          matchesIncome = income > 4000
+          break
+        case 'LAB_THRESHOLD':
+          matchesIncome = income <= 4000 // Within LAB calculation scope
+          break
+        case 'ABOVE_THRESHOLD':
+          matchesIncome = income > 4000 // Above LAB threshold
+          break
+        case 'CUSTOM':
+          const min = customMinIncome ? parseInt(customMinIncome) : 0
+          const max = customMaxIncome ? parseInt(customMaxIncome) : Infinity
+          matchesIncome = income >= min && income <= max
+          break
+      }
+    }
+    
+    return matchesStatus && matchesSearch && matchesIncome
   })
 
   const getStatusColor = (status: string) => {
@@ -167,28 +201,79 @@ export default function CasesPage() {
         {/* Filters and Search */}
         <div className="bg-white shadow rounded-lg mb-6">
           <div className="px-6 py-4 border-b border-gray-200">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
-              <div className="flex space-x-4">
-                <select
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                  className="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="ALL">All Status</option>
-                  <option value="PENDING">Pending</option>
-                  <option value="PROCESSING">Processing</option>
-                  <option value="VALIDATED">Validated</option>
-                  <option value="EXCLUDED">Excluded</option>
-                </select>
+            <div className="space-y-4">
+              {/* First Row: Status and Search */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
+                <div className="flex space-x-4">
+                  <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    className="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="ALL">All Status</option>
+                    <option value="PENDING">Pending</option>
+                    <option value="PROCESSING">Processing</option>
+                    <option value="VALIDATED">Validated</option>
+                    <option value="EXCLUDED">Excluded</option>
+                  </select>
+                </div>
+                <div className="flex-1 max-w-md">
+                  <input
+                    type="text"
+                    placeholder="Search by case number, title, income, or content..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
               </div>
-              <div className="flex-1 max-w-md">
-                <input
-                  type="text"
-                  placeholder="Search by case number, title, or status..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+              
+              {/* Second Row: Income Filters */}
+              <div className="flex flex-col sm:flex-row sm:items-center space-y-4 sm:space-y-0 sm:space-x-4">
+                <div className="flex items-center space-x-2">
+                  <label className="text-sm font-medium text-gray-700">Income Filter:</label>
+                  <select
+                    value={incomeFilter}
+                    onChange={(e) => setIncomeFilter(e.target.value)}
+                    className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="ALL">All Income Ranges</option>
+                    <option value="LOW">Low (≤ $2,500)</option>
+                    <option value="MEDIUM">Medium ($2,501 - $4,000)</option>
+                    <option value="HIGH">High (&gt; $4,000)</option>
+                    <option value="LAB_THRESHOLD">Within LAB Scope (≤ $4,000)</option>
+                    <option value="ABOVE_THRESHOLD">Above LAB Threshold (&gt; $4,000)</option>
+                    <option value="CUSTOM">Custom Range</option>
+                  </select>
+                </div>
+                
+                {/* Custom Range Inputs */}
+                {incomeFilter === 'CUSTOM' && (
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm text-gray-500">$</span>
+                    <input
+                      type="number"
+                      placeholder="Min"
+                      value={customMinIncome}
+                      onChange={(e) => setCustomMinIncome(e.target.value)}
+                      className="w-20 border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-500">to</span>
+                    <span className="text-sm text-gray-500">$</span>
+                    <input
+                      type="number"
+                      placeholder="Max"
+                      value={customMaxIncome}
+                      onChange={(e) => setCustomMaxIncome(e.target.value)}
+                      className="w-20 border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                )}
+                
+                {/* Filter Summary */}
+                <div className="text-sm text-gray-500">
+                  Showing {filteredCases.length} of {realisticCaseData.length} cases
+                </div>
               </div>
             </div>
           </div>
