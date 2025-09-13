@@ -19,7 +19,6 @@ import {
   Save,
   X,
   BarChart3,
-  Filter,
   Download
 } from 'lucide-react'
 import { ProcessedDocument } from '@/lib/document-processor'
@@ -336,7 +335,7 @@ export default function ValidationDashboard({
       
       setActionFeedback({ type: 'success', message: `Document ${document.fileName} approved successfully` })
       setTimeout(() => setActionFeedback(null), 3000)
-    } catch (error) {
+    } catch {
       setActionFeedback({ type: 'error', message: 'Failed to approve document' })
       setTimeout(() => setActionFeedback(null), 3000)
     }
@@ -359,7 +358,7 @@ export default function ValidationDashboard({
         
         setActionFeedback({ type: 'success', message: `Document ${document.fileName} rejected: ${reason}` })
         setTimeout(() => setActionFeedback(null), 3000)
-      } catch (error) {
+      } catch {
         setActionFeedback({ type: 'error', message: 'Failed to reject document' })
         setTimeout(() => setActionFeedback(null), 3000)
       }

@@ -4,9 +4,34 @@ import Link from 'next/link'
 import { useState } from 'react'
 import { formatCurrency, formatDateTime } from '@/lib/utils'
 
+// Type definitions
+type CaseData = {
+  id: string
+  title: string
+  caseNumber: string
+  status: string
+  uploadedAt: Date
+  husbandIncome: number
+  nafkahIddah: number
+  mutaah: number
+  confidence: number
+  uploadedBy: { name: string }
+  extractedText: string
+  marriageDuration: number
+  exclusionReason: string | null
+}
+
+type EditHistoryItem = {
+  caseId: string
+  action: string
+  timestamp: string
+  changes: Partial<CaseData> | Record<string, { from: unknown; to: unknown }>
+  userId: string
+}
+
 // Realistic Singapore Syariah Court case data for LAB eBantu demonstration
 // Based on actual nafkah iddah ($200-$500/month) and mutaah ($3-$7/day) ranges
-const realisticCaseData = [
+const realisticCaseData: CaseData[] = [
   {
     id: '1',
     title: 'SYC2025001 - Divorce with Ancillary Matters',
@@ -103,10 +128,131 @@ export default function CasesPage() {
   const [filterStatus, setFilterStatus] = useState('ALL')
   const [searchTerm, setSearchTerm] = useState('')
   const [incomeFilter, setIncomeFilter] = useState('ALL')
+  const [exclusionFilter, setExclusionFilter] = useState('ALL')
   const [customMinIncome, setCustomMinIncome] = useState('')
   const [customMaxIncome, setCustomMaxIncome] = useState('')
+  const [selectedCase, setSelectedCase] = useState<typeof realisticCaseData[0] | null>(null)
+  const [viewMode, setViewMode] = useState<'table' | 'detail'>('table')
+  const [showDebug, setShowDebug] = useState(false)
+  
+  // Edit functionality state
+  const [editMode, setEditMode] = useState<'none' | 'single' | 'bulk'>('none')
+  const [editingCase, setEditingCase] = useState<string | null>(null)
+  const [selectedCases, setSelectedCases] = useState<Set<string>>(new Set())
+  const [editFormData, setEditFormData] = useState<Partial<CaseData>>({})
+  const [bulkEditChanges, setBulkEditChanges] = useState<Partial<CaseData>>({})
+  const [casesData, setCasesData] = useState(realisticCaseData)
+  const [showEditHistory, setShowEditHistory] = useState(false)
+  const [editHistory, setEditHistory] = useState<EditHistoryItem[]>([])
 
-  const filteredCases = realisticCaseData.filter(caseItem => {
+  // Handle individual case editing
+  const startEditing = (caseId: string) => {
+    const caseToEdit = casesData.find(c => c.id === caseId)
+    if (caseToEdit) {
+      setEditingCase(caseId)
+      setEditFormData(caseToEdit)
+      setEditMode('single')
+    }
+  }
+
+  const cancelEditing = () => {
+    setEditingCase(null)
+    setEditFormData({})
+    setEditMode('none')
+  }
+
+  const saveEdit = (caseId: string) => {
+    const originalCase = casesData.find(c => c.id === caseId)
+    if (!originalCase) return
+
+    // Calculate changes
+    const changes: Record<string, { from: unknown; to: unknown }> = {}
+    Object.keys(editFormData).forEach(key => {
+      const newValue = editFormData[key as keyof typeof editFormData]
+      const oldValue = originalCase[key as keyof typeof originalCase]
+      if (newValue !== oldValue) {
+        changes[key] = { from: oldValue, to: newValue }
+      }
+    })
+
+    // Update the case data
+    setCasesData(prev => prev.map(c => 
+      c.id === caseId ? { ...c, ...editFormData } : c
+    ))
+
+    // Add to edit history
+    setEditHistory(prev => [...prev, {
+      caseId,
+      action: 'single_edit',
+      timestamp: new Date().toISOString(),
+      changes,
+      userId: 'LAB_Officer_' + Math.random().toString(36).substr(2, 5)
+    }])
+
+    cancelEditing()
+    alert(`✅ Case ${originalCase.caseNumber} updated successfully!`)
+  }
+
+  // Handle bulk operations
+  const toggleCaseSelection = (caseId: string) => {
+    setSelectedCases(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(caseId)) {
+        newSet.delete(caseId)
+      } else {
+        newSet.add(caseId)
+      }
+      return newSet
+    })
+  }
+
+  const selectAllFiltered = () => {
+    const allIds = new Set(filteredCases.map(c => c.id))
+    setSelectedCases(allIds)
+  }
+
+  const clearSelection = () => {
+    setSelectedCases(new Set())
+  }
+
+  const startBulkEdit = () => {
+    if (selectedCases.size === 0) {
+      alert('Please select cases to edit')
+      return
+    }
+    setEditMode('bulk')
+    setBulkEditChanges({})
+  }
+
+  const applyBulkEdit = () => {
+    if (Object.keys(bulkEditChanges).length === 0) {
+      alert('No changes to apply')
+      return
+    }
+
+    // Apply changes to selected cases
+    setCasesData(prev => prev.map(c => 
+      selectedCases.has(c.id) ? { ...c, ...bulkEditChanges } : c
+    ))
+
+    // Add to edit history
+    selectedCases.forEach(caseId => {
+      setEditHistory(prev => [...prev, {
+        caseId,
+        action: 'bulk_edit',
+        timestamp: new Date().toISOString(),
+        changes: bulkEditChanges,
+        userId: 'LAB_Officer_' + Math.random().toString(36).substr(2, 5)
+      }])
+    })
+
+    alert(`✅ Bulk edit applied to ${selectedCases.size} cases`)
+    setEditMode('none')
+    setBulkEditChanges({})
+    clearSelection()
+  }
+
+  const filteredCases = casesData.filter(caseItem => {
     const matchesStatus = filterStatus === 'ALL' || caseItem.status === filterStatus
     const matchesSearch = caseItem.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          caseItem.caseNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -140,8 +286,33 @@ export default function CasesPage() {
           break
       }
     }
+
+    // Exclusion filtering logic
+    let matchesExclusion = true
+    if (exclusionFilter !== 'ALL') {
+      switch (exclusionFilter) {
+        case 'INCLUDED':
+          matchesExclusion = !caseItem.exclusionReason // Not excluded
+          break
+        case 'EXCLUDED':
+          matchesExclusion = !!caseItem.exclusionReason // Has exclusion reason
+          break
+        case 'STATISTICAL_OUTLIER':
+          matchesExclusion = caseItem.exclusionReason === 'STATISTICAL_OUTLIER'
+          break
+        case 'DATA_QUALITY':
+          matchesExclusion = caseItem.exclusionReason === 'DATA_QUALITY'
+          break
+        case 'CONSENT_ORDER':
+          matchesExclusion = caseItem.exclusionReason === 'CONSENT_ORDER'
+          break
+        case 'INCOMPLETE_DATA':
+          matchesExclusion = caseItem.exclusionReason === 'INCOMPLETE_DATA'
+          break
+      }
+    }
     
-    return matchesStatus && matchesSearch && matchesIncome
+    return matchesStatus && matchesSearch && matchesIncome && matchesExclusion
   })
 
   const getStatusColor = (status: string) => {
@@ -163,6 +334,183 @@ export default function CasesPage() {
     if (confidence >= 0.9) return 'text-green-600'
     if (confidence >= 0.7) return 'text-yellow-600'
     return 'text-red-600'
+  }
+
+  const handleViewCase = (caseItem: typeof realisticCaseData[0]) => {
+    setSelectedCase(caseItem)
+    setViewMode('detail')
+  }
+
+  const handleBackToTable = () => {
+    setSelectedCase(null)
+    setViewMode('table')
+  }
+
+  const handleValidateCase = (caseItem: typeof realisticCaseData[0]) => {
+    // Navigate to validation page with case ID
+    window.location.href = `/validation?caseId=${caseItem.id}`
+  }
+
+  const handleEditCase = (caseItem: typeof realisticCaseData[0]) => {
+    // Here you could open an edit modal or navigate to edit page
+    alert(`Edit functionality for case ${caseItem.caseNumber} - To be implemented`)
+  }
+
+  // If viewing detailed case, render detail view
+  if (viewMode === 'detail' && selectedCase) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        {/* Navigation */}
+        <nav className="bg-white shadow-sm border-b border-gray-200">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-between h-16">
+              <div className="flex items-center space-x-4">
+                <Link href="/" className="text-xl font-bold text-blue-600">
+                  eBantu+
+                </Link>
+                <span className="text-gray-400">|</span>
+                <button 
+                  onClick={handleBackToTable}
+                  className="text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  ← Back to Cases
+                </button>
+              </div>
+            </div>
+          </div>
+        </nav>
+
+        <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+          {/* Case Detail Header */}
+          <div className="bg-white shadow rounded-lg mb-6">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900">{selectedCase.title}</h1>
+                  <p className="text-gray-600">Case Number: {selectedCase.caseNumber}</p>
+                </div>
+                <div className="flex space-x-2">
+                  <span className={`px-3 py-1 text-sm font-medium rounded-full ${getStatusColor(selectedCase.status)}`}>
+                    {selectedCase.status.toLowerCase()}
+                  </span>
+                  <span className={`text-sm font-medium ${getConfidenceColor(selectedCase.confidence)}`}>
+                    {Math.round(selectedCase.confidence * 100)}% confidence
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Case Details Grid */}
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {/* Financial Information */}
+                <div className="bg-blue-50 rounded-lg p-4">
+                  <h3 className="text-lg font-semibold text-blue-900 mb-3">Financial Information</h3>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-blue-700">Husband Income:</span>
+                      <span className="font-medium">{formatCurrency(selectedCase.husbandIncome)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-blue-700">Nafkah Iddah:</span>
+                      <span className="font-medium">{formatCurrency(selectedCase.nafkahIddah)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-blue-700">Mutaah:</span>
+                      <span className="font-medium">{formatCurrency(selectedCase.mutaah)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-blue-700">Marriage Duration:</span>
+                      <span className="font-medium">{selectedCase.marriageDuration} years</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Case Information */}
+                <div className="bg-green-50 rounded-lg p-4">
+                  <h3 className="text-lg font-semibold text-green-900 mb-3">Case Information</h3>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-green-700">Status:</span>
+                      <span className="font-medium">{selectedCase.status}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-green-700">Uploaded:</span>
+                      <span className="font-medium">{formatDateTime(selectedCase.uploadedAt)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-green-700">Uploaded By:</span>
+                      <span className="font-medium">{selectedCase.uploadedBy.name}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-green-700">Confidence:</span>
+                      <span className="font-medium">{Math.round(selectedCase.confidence * 100)}%</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* LAB Formula Validation */}
+                <div className="bg-yellow-50 rounded-lg p-4">
+                  <h3 className="text-lg font-semibold text-yellow-900 mb-3">LAB Formula Check</h3>
+                  <div className="space-y-2">
+                    <div className="text-sm">
+                      <span className="text-yellow-700">Expected Nafkah:</span>
+                      <span className="font-medium ml-2">
+                        {formatCurrency(Math.round(0.14 * selectedCase.husbandIncome + 47))}
+                      </span>
+                    </div>
+                    <div className="text-sm">
+                      <span className="text-yellow-700">Expected Mutaah:</span>
+                      <span className="font-medium ml-2">
+                        {formatCurrency(Math.round(0.00096 * selectedCase.husbandIncome + 0.85))}
+                      </span>
+                    </div>
+                    <div className="text-sm">
+                      <span className="text-yellow-700">Formula Accuracy:</span>
+                      <span className="font-medium ml-2 text-green-600">
+                        {selectedCase.husbandIncome <= 4000 ? '✓ Within LAB scope' : '⚠ Above threshold'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Extracted Text */}
+              <div className="mt-6 bg-gray-50 rounded-lg p-4">
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">Extracted Text</h3>
+                <div className="text-sm text-gray-700 bg-white p-3 rounded border">
+                  {selectedCase.extractedText}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="mt-6 flex space-x-3">
+                {selectedCase.status === 'PENDING' && (
+                  <button 
+                    onClick={() => handleValidateCase(selectedCase)}
+                    className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  >
+                    Validate Case
+                  </button>
+                )}
+                <button 
+                  onClick={() => handleEditCase(selectedCase)}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  Edit Case
+                </button>
+                <button 
+                  onClick={handleBackToTable}
+                  className="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                >
+                  Back to List
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -192,11 +540,214 @@ export default function CasesPage() {
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="px-4 py-6 sm:px-0">
-          <h1 className="text-3xl font-bold text-gray-900">Case Management</h1>
-          <p className="mt-2 text-gray-600">
-            Review and manage Syariah Court cases and extracted data
-          </p>
+          <div className="flex justify-between items-start">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Case Management</h1>
+              <p className="mt-2 text-gray-600">
+                Review and manage Syariah Court cases and extracted data
+              </p>
+            </div>
+            
+            {/* Edit Mode Controls */}
+            <div className="flex items-center space-x-3">
+              {selectedCases.size > 0 && (
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm text-gray-600">
+                    {selectedCases.size} selected
+                  </span>
+                  <button
+                    onClick={startBulkEdit}
+                    className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+                  >
+                    Bulk Edit
+                  </button>
+                  <button
+                    onClick={clearSelection}
+                    className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                  >
+                    Clear
+                  </button>
+                </div>
+              )}
+              
+              <button
+                onClick={() => setShowEditHistory(!showEditHistory)}
+                className="px-3 py-1 text-sm bg-purple-100 text-purple-700 rounded hover:bg-purple-200"
+              >
+                Edit History
+              </button>
+              
+              <div className="flex items-center space-x-2">
+                <span className="text-sm text-gray-600">Edit Mode:</span>
+                <span className={`px-2 py-1 text-xs rounded-full ${
+                  editMode === 'none' ? 'bg-gray-100 text-gray-700' :
+                  editMode === 'single' ? 'bg-blue-100 text-blue-700' :
+                  'bg-purple-100 text-purple-700'
+                }`}>
+                  {editMode === 'none' ? 'View Only' : 
+                   editMode === 'single' ? 'Single Edit' : 'Bulk Edit'}
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
+
+        {/* Bulk Edit Panel */}
+        {editMode === 'bulk' && (
+          <div className="bg-white shadow rounded-lg mb-6 border-l-4 border-purple-500">
+            <div className="px-6 py-4">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium text-gray-900">
+                  Bulk Edit - {selectedCases.size} cases selected
+                </h3>
+                <button
+                  onClick={() => setEditMode('none')}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Status
+                  </label>
+                  <select
+                    value={bulkEditChanges.status || ''}
+                    onChange={(e) => setBulkEditChanges(prev => ({
+                      ...prev, 
+                      status: e.target.value || undefined
+                    }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">No change</option>
+                    <option value="PENDING">Pending</option>
+                    <option value="PROCESSING">Processing</option>
+                    <option value="VALIDATED">Validated</option>
+                    <option value="FLAGGED">Flagged</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Confidence Threshold
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={bulkEditChanges.confidence || ''}
+                    onChange={(e) => setBulkEditChanges(prev => ({
+                      ...prev, 
+                      confidence: e.target.value ? parseFloat(e.target.value) : undefined
+                    }))}
+                    placeholder="0.00 - 1.00"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Exclusion Reason
+                  </label>
+                  <select
+                    value={bulkEditChanges.exclusionReason || ''}
+                    onChange={(e) => setBulkEditChanges(prev => ({
+                      ...prev, 
+                      exclusionReason: e.target.value || null
+                    }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">No change</option>
+                    <option value="">Clear exclusion</option>
+                    <option value="STATISTICAL_OUTLIER">Statistical Outlier</option>
+                    <option value="DATA_QUALITY">Data Quality Issues</option>
+                    <option value="CONSENT_ORDER">Consent Order</option>
+                    <option value="INCOMPLETE_DATA">Incomplete Data</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div className="mt-4 flex justify-end space-x-3">
+                <button
+                  onClick={() => {setEditMode('none'); setBulkEditChanges({})}}
+                  className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={applyBulkEdit}
+                  className="px-4 py-2 text-sm bg-purple-600 text-white rounded hover:bg-purple-700"
+                >
+                  Apply Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit History Modal */}
+        {showEditHistory && (
+          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 z-50 flex items-center justify-center">
+            <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[80vh] overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-medium text-gray-900">Edit History</h3>
+                  <button
+                    onClick={() => setShowEditHistory(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+              
+              <div className="p-6 overflow-y-auto max-h-[60vh]">
+                {editHistory.length > 0 ? (
+                  <div className="space-y-4">
+                    {editHistory.slice(-20).reverse().map((entry, index) => (
+                      <div key={index} className="border border-gray-200 rounded-lg p-4">
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <span className="font-medium text-gray-900">Case {entry.caseId}</span>
+                            <span className={`ml-2 px-2 py-1 text-xs rounded-full ${
+                              entry.action === 'single_edit' ? 'bg-blue-100 text-blue-800' :
+                              'bg-purple-100 text-purple-800'
+                            }`}>
+                              {entry.action.replace('_', ' ')}
+                            </span>
+                          </div>
+                          <div className="text-right text-xs text-gray-500">
+                            <div>{new Date(entry.timestamp).toLocaleString()}</div>
+                            <div>by {entry.userId}</div>
+                          </div>
+                        </div>
+                        
+                        <div className="text-sm text-gray-600">
+                          <div className="font-medium mb-1">Changes:</div>
+                          {Object.entries(entry.changes).map(([field, change]) => (
+                            <div key={field} className="ml-2">
+                              <span className="font-medium">{field}:</span>
+                              <span className="text-red-600 ml-1">{JSON.stringify(change.from)}</span>
+                              <span className="mx-1">→</span>
+                              <span className="text-green-600">{JSON.stringify(change.to)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center text-gray-500 py-8">
+                    No edit history available
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Filters and Search */}
         <div className="bg-white shadow rounded-lg mb-6">
@@ -247,6 +798,24 @@ export default function CasesPage() {
                   </select>
                 </div>
                 
+                {/* Exclusion Filter */}
+                <div className="flex items-center space-x-2">
+                  <label className="text-sm font-medium text-gray-700">Exclusion Filter:</label>
+                  <select
+                    value={exclusionFilter}
+                    onChange={(e) => setExclusionFilter(e.target.value)}
+                    className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="ALL">All Cases</option>
+                    <option value="INCLUDED">Included in Formula (No Exclusions)</option>
+                    <option value="EXCLUDED">Excluded from Formula</option>
+                    <option value="STATISTICAL_OUTLIER">Statistical Outliers</option>
+                    <option value="DATA_QUALITY">Data Quality Issues</option>
+                    <option value="CONSENT_ORDER">Consent Orders</option>
+                    <option value="INCOMPLETE_DATA">Incomplete Data</option>
+                  </select>
+                </div>
+                
                 {/* Custom Range Inputs */}
                 {incomeFilter === 'CUSTOM' && (
                   <div className="flex items-center space-x-2">
@@ -284,7 +853,18 @@ export default function CasesPage() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Case
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={filteredCases.length > 0 && filteredCases.every(c => selectedCases.has(c.id))}
+                        onChange={filteredCases.length > 0 && filteredCases.every(c => selectedCases.has(c.id)) 
+                          ? clearSelection 
+                          : selectAllFiltered
+                        }
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span>Case</span>
+                    </div>
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Financial Data
@@ -305,33 +885,119 @@ export default function CasesPage() {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredCases.map((caseItem) => (
-                  <tr key={caseItem.id} className="hover:bg-gray-50">
+                  <tr key={caseItem.id} className={`hover:bg-gray-50 ${
+                    selectedCases.has(caseItem.id) ? 'bg-blue-50' : ''
+                  } ${editingCase === caseItem.id ? 'bg-amber-50' : ''}`}>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">
-                          {caseItem.title}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          {caseItem.caseNumber}
+                      <div className="flex items-center space-x-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedCases.has(caseItem.id)}
+                          onChange={() => toggleCaseSelection(caseItem.id)}
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <div>
+                          {editingCase === caseItem.id ? (
+                            <div className="space-y-1">
+                              <input
+                                type="text"
+                                value={editFormData.title || ''}
+                                onChange={(e) => setEditFormData(prev => ({...prev, title: e.target.value}))}
+                                className="text-sm font-medium text-gray-900 border border-gray-300 rounded px-2 py-1 w-full"
+                              />
+                              <input
+                                type="text"
+                                value={editFormData.caseNumber || ''}
+                                onChange={(e) => setEditFormData(prev => ({...prev, caseNumber: e.target.value}))}
+                                className="text-sm text-gray-500 border border-gray-300 rounded px-2 py-1 w-full"
+                              />
+                            </div>
+                          ) : (
+                            <div>
+                              <div className="text-sm font-medium text-gray-900">
+                                {caseItem.title}
+                              </div>
+                              <div className="text-sm text-gray-500">
+                                {caseItem.caseNumber}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">
-                        <div>Income: {formatCurrency(caseItem.husbandIncome)}</div>
-                        <div>Nafkah: {formatCurrency(caseItem.nafkahIddah)}</div>
-                        <div>Mutaah: {formatCurrency(caseItem.mutaah)}</div>
-                      </div>
+                      {editingCase === caseItem.id ? (
+                        <div className="space-y-2">
+                          <div className="flex items-center space-x-1">
+                            <span className="text-xs text-gray-500 w-12">Income:</span>
+                            <input
+                              type="number"
+                              value={editFormData.husbandIncome || ''}
+                              onChange={(e) => setEditFormData(prev => ({...prev, husbandIncome: parseInt(e.target.value) || 0}))}
+                              className="text-sm border border-gray-300 rounded px-2 py-1 w-20"
+                            />
+                          </div>
+                          <div className="flex items-center space-x-1">
+                            <span className="text-xs text-gray-500 w-12">Nafkah:</span>
+                            <input
+                              type="number"
+                              value={editFormData.nafkahIddah || ''}
+                              onChange={(e) => setEditFormData(prev => ({...prev, nafkahIddah: parseInt(e.target.value) || 0}))}
+                              className="text-sm border border-gray-300 rounded px-2 py-1 w-20"
+                            />
+                          </div>
+                          <div className="flex items-center space-x-1">
+                            <span className="text-xs text-gray-500 w-12">Mutaah:</span>
+                            <input
+                              type="number"
+                              value={editFormData.mutaah || ''}
+                              onChange={(e) => setEditFormData(prev => ({...prev, mutaah: parseInt(e.target.value) || 0}))}
+                              className="text-sm border border-gray-300 rounded px-2 py-1 w-20"
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-sm text-gray-900">
+                          <div>Income: {formatCurrency(caseItem.husbandIncome)}</div>
+                          <div>Nafkah: {formatCurrency(caseItem.nafkahIddah)}</div>
+                          <div>Mutaah: {formatCurrency(caseItem.mutaah)}</div>
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(caseItem.status)}`}>
-                        {caseItem.status.toLowerCase()}
-                      </span>
+                      {editingCase === caseItem.id ? (
+                        <select
+                          value={editFormData.status || ''}
+                          onChange={(e) => setEditFormData(prev => ({...prev, status: e.target.value}))}
+                          className="text-sm border border-gray-300 rounded px-2 py-1"
+                        >
+                          <option value="PENDING">Pending</option>
+                          <option value="PROCESSING">Processing</option>
+                          <option value="VALIDATED">Validated</option>
+                          <option value="FLAGGED">Flagged</option>
+                        </select>
+                      ) : (
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(caseItem.status)}`}>
+                          {caseItem.status.toLowerCase()}
+                        </span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`text-sm font-medium ${getConfidenceColor(caseItem.confidence)}`}>
-                        {Math.round(caseItem.confidence * 100)}%
-                      </span>
+                      {editingCase === caseItem.id ? (
+                        <input
+                          type="number"
+                          min="0"
+                          max="1"
+                          step="0.01"
+                          value={editFormData.confidence || ''}
+                          onChange={(e) => setEditFormData(prev => ({...prev, confidence: parseFloat(e.target.value) || 0}))}
+                          className="text-sm border border-gray-300 rounded px-2 py-1 w-16"
+                        />
+                      ) : (
+                        <span className={`text-sm font-medium ${getConfidenceColor(caseItem.confidence)}`}>
+                          {Math.round(caseItem.confidence * 100)}%
+                        </span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       <div>{formatDateTime(caseItem.uploadedAt)}</div>
@@ -339,17 +1005,43 @@ export default function CasesPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex space-x-2">
-                        <button className="text-blue-600 hover:text-blue-900">
-                          View
-                        </button>
-                        {caseItem.status === 'PENDING' && (
-                          <button className="text-green-600 hover:text-green-900">
-                            Validate
-                          </button>
+                        {editingCase === caseItem.id ? (
+                          <>
+                            <button
+                              onClick={() => saveEdit(caseItem.id)}
+                              className="text-green-600 hover:text-green-900 font-medium"
+                            >
+                              Save
+                            </button>
+                            <button
+                              onClick={cancelEditing}
+                              className="text-gray-600 hover:text-gray-900 font-medium"
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button 
+                              onClick={() => handleViewCase(caseItem)}
+                              className="text-blue-600 hover:text-blue-900 font-medium"
+                            >
+                              View
+                            </button>
+                            <button
+                              onClick={() => startEditing(caseItem.id)}
+                              className="text-amber-600 hover:text-amber-900 font-medium"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => window.open(`/validation?caseId=${caseItem.id}`, '_blank')}
+                              className="text-purple-600 hover:text-purple-900 font-medium"
+                            >
+                              Validate
+                            </button>
+                          </>
                         )}
-                        <button className="text-gray-600 hover:text-gray-900">
-                          Edit
-                        </button>
                       </div>
                     </td>
                   </tr>
@@ -411,6 +1103,103 @@ export default function CasesPage() {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Debug Panel - Show current filter state */}
+        {showDebug && (
+          <div className="mt-6 bg-white shadow rounded-lg border-2 border-blue-200">
+            <div className="px-6 py-4 border-b border-gray-200 bg-blue-50">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-medium text-gray-900">🐛 Debug Panel</h3>
+                <button 
+                  onClick={() => setShowDebug(false)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  ✕ Close
+                </button>
+              </div>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+                <div>
+                  <span className="font-medium text-gray-700">View Mode:</span>
+                  <span className="ml-2 text-blue-600">{viewMode}</span>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-700">Filter Status:</span>
+                  <span className="ml-2 text-blue-600">{filterStatus}</span>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-700">Income Filter:</span>
+                  <span className="ml-2 text-blue-600">{incomeFilter}</span>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-700">Exclusion Filter:</span>
+                  <span className="ml-2 text-blue-600">{exclusionFilter}</span>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-700">Search Term:</span>
+                  <span className="ml-2 text-blue-600">&quot;{searchTerm}&quot;</span>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-700">Filtered Results:</span>
+                  <span className="ml-2 text-blue-600">{filteredCases.length} cases</span>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-700">Selected Case:</span>
+                  <span className="ml-2 text-blue-600">{selectedCase?.caseNumber || 'None'}</span>
+                </div>
+                {incomeFilter === 'CUSTOM' && (
+                  <>
+                    <div>
+                      <span className="font-medium text-gray-700">Custom Min:</span>
+                      <span className="ml-2 text-blue-600">${customMinIncome || '0'}</span>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-700">Custom Max:</span>
+                      <span className="ml-2 text-blue-600">${customMaxIncome || '∞'}</span>
+                    </div>
+                  </>
+                )}
+              </div>
+              
+              {/* Filter breakdown */}
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <h4 className="font-medium text-gray-700 mb-2">Filter Breakdown:</h4>
+                <div className="text-xs text-gray-600 space-y-1">
+                  <div>• Total cases: {realisticCaseData.length}</div>
+                  <div>• After status filter: {realisticCaseData.filter(c => filterStatus === 'ALL' || c.status === filterStatus).length}</div>
+                  <div>• After exclusion filter: {realisticCaseData.filter(c => {
+                    const statusMatch = filterStatus === 'ALL' || c.status === filterStatus;
+                    if (!statusMatch) return false;
+                    
+                    const isExcluded = Boolean(c.exclusionReason);
+                    if (exclusionFilter === 'all') return true;
+                    if (exclusionFilter === 'included') return !isExcluded;
+                    if (exclusionFilter === 'excluded') return isExcluded;
+                    if (exclusionFilter === 'statistical-outliers') return isExcluded && c.exclusionReason === 'Statistical Outlier';
+                    if (exclusionFilter === 'data-quality') return isExcluded && c.exclusionReason === 'Data Quality Issue';
+                    if (exclusionFilter === 'consent-orders') return isExcluded && c.exclusionReason === 'Consent Order';
+                    if (exclusionFilter === 'incomplete-data') return isExcluded && c.exclusionReason === 'Incomplete Data';
+                    return true;
+                  }).length}</div>
+                  <div>• After search filter: {filteredCases.length}</div>
+                  <div>• Income ranges: Low (≤$2,500): {realisticCaseData.filter(c => c.husbandIncome <= 2500).length}, Medium ($2,501-$4,000): {realisticCaseData.filter(c => c.husbandIncome > 2500 && c.husbandIncome <= 4000).length}, High (&gt;$4,000): {realisticCaseData.filter(c => c.husbandIncome > 4000).length}</div>
+                  <div>• Exclusion breakdown: Included: {realisticCaseData.filter(c => !c.exclusionReason).length}, Excluded: {realisticCaseData.filter(c => Boolean(c.exclusionReason)).length} (Outliers: {realisticCaseData.filter(c => c.exclusionReason === 'Statistical Outlier').length}, Quality: {realisticCaseData.filter(c => c.exclusionReason === 'Data Quality Issue').length}, Consent: {realisticCaseData.filter(c => c.exclusionReason === 'Consent Order').length}, Incomplete: {realisticCaseData.filter(c => c.exclusionReason === 'Incomplete Data').length})</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Debug Toggle Button */}
+        <div className="mt-6 text-center">
+          <button 
+            onClick={() => setShowDebug(!showDebug)}
+            className="bg-yellow-100 text-yellow-800 px-4 py-2 rounded-md text-sm font-medium hover:bg-yellow-200 focus:outline-none focus:ring-2 focus:ring-yellow-500"
+          >
+            {showDebug ? '🐛 Hide Debug Panel' : '🐛 Show Debug Panel'}
+          </button>
         </div>
       </div>
     </div>
