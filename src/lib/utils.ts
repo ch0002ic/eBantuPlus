@@ -61,9 +61,10 @@ export function generateCaseNumber(): string {
   return `SYC${year}${random}`
 }
 
-export function extractTextFromPDF(_buffer: Buffer): Promise<string> {
+export function extractTextFromPDF(buffer: Buffer): Promise<string> {
   // This would use pdf-parse library in production
   // For now, return a placeholder
+  console.log('Processing PDF buffer of size:', buffer.length)
   return Promise.resolve("Extracted text would appear here...")
 }
 

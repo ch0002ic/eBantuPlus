@@ -43,10 +43,45 @@ next-env.d.ts
 
 # prisma
 /src/generated/prisma
+prisma/.env
 
 # IDE
 .vscode/settings.json
 .idea/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Local development
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Temporary files
+*.tmp
+*.temp
+
+# Security files
+*.pem
+*.key
+*.p12
+*.p8
+secrets/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
 
 # logs
 *.log
