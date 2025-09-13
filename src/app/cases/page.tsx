@@ -278,16 +278,28 @@ export default function CasesPage() {
             title: caseItem.title,
             caseNumber: caseItem.caseNumber || caseItem.id,
             status: caseItem.status,
-            uploadedAt: new Date(caseItem.pdfContent?.uploadDate || Date.now()),
-            husbandIncome: caseItem.extractedData?.husbandIncome || 0,
-            nafkahIddah: caseItem.extractedData?.nafkahIddah || 0,
-            mutaah: caseItem.extractedData?.mutaah || 0,
-            confidence: caseItem.extractedData?.confidence || 0,
-            uploadedBy: { name: caseItem.uploadedBy || 'LAB Officer' },
+            uploadedAt: new Date(caseItem.uploadedAt),
+            husbandIncome: caseItem.husbandIncome || 0,
+            nafkahIddah: caseItem.nafkahIddah || 0,
+            mutaah: caseItem.mutaah || 0,
+            confidence: caseItem.confidence || 0,
+            uploadedBy: { name: caseItem.uploadedBy?.name || 'LAB Officer' },
             extractedText: caseItem.extractedText || '',
-            marriageDuration: caseItem.extractedData?.marriageDuration || 0,
+            marriageDuration: caseItem.marriageDuration || 0,
             exclusionReason: null,
-            pdfContent: caseItem.pdfContent
+            pdfContent: {
+              fileName: caseItem.fileName || 'uploaded_document.pdf',
+              uploadDate: new Date(caseItem.uploadedAt),
+              fileSize: `${Math.round(caseItem.fileSize / 1024)} KB`,
+              pageCount: 1,
+              fullText: caseItem.extractedText || 'Document content extracted.',
+              keyExtracts: {
+                parties: ['Processing...', 'Processing...'],
+                courtDetails: `Syariah Court - Case No: ${caseItem.caseNumber || 'Processing...'}`,
+                financialInfo: [`Husband Income: $${caseItem.husbandIncome || 'Processing...'}`],
+                awards: [`Nafkah Iddah: $${caseItem.nafkahIddah || 'Processing...'} per month`]
+              }
+            }
           }))
           setCasesData(mappedCases)
         } else {

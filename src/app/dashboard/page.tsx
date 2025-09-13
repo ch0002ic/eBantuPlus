@@ -116,7 +116,39 @@ export default function Dashboard() {
       const result = await response.json()
       
       if (result.success) {
-        setCases(result.data.cases)
+        // Transform Prisma data to match expected dashboard structure
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const transformedCases = result.data.cases.map((caseItem: any) => ({
+          id: caseItem.id,
+          title: caseItem.title,
+          caseNumber: caseItem.caseNumber || caseItem.id,
+          status: caseItem.status.toLowerCase(),
+          uploadedAt: new Date(caseItem.uploadedAt).toLocaleString(),
+          uploadedBy: caseItem.uploadedBy?.name || 'LAB Officer',
+          extractedData: {
+            husbandIncome: caseItem.husbandIncome || 0,
+            nafkahIddah: caseItem.nafkahIddah || 0,
+            mutaah: caseItem.mutaah || 0,
+            marriageDuration: caseItem.marriageDuration || 0,
+            confidence: caseItem.confidence || 0.85
+          },
+          extractedText: caseItem.extractedText || 'Document processed successfully.',
+          originalDocument: caseItem.fileName || 'uploaded_document.pdf',
+          pdfContent: {
+            fileName: caseItem.fileName || 'uploaded_document.pdf',
+            uploadDate: new Date(caseItem.uploadedAt),
+            fileSize: `${Math.round(caseItem.fileSize / 1024)} KB`,
+            pageCount: 1,
+            fullText: caseItem.extractedText || 'Document content extracted.',
+            keyExtracts: {
+              parties: ['Processing...', 'Processing...'],
+              courtDetails: `Syariah Court - Case No: ${caseItem.caseNumber || 'Processing...'}`,
+              financialInfo: [`Husband Income: $${caseItem.husbandIncome || 'Processing...'}`],
+              awards: [`Nafkah Iddah: $${caseItem.nafkahIddah || 'Processing...'} per month`]
+            }
+          }
+        }))
+        setCases(transformedCases)
       }
     } catch (error) {
       console.error('Error refreshing cases:', error)
@@ -134,7 +166,39 @@ export default function Dashboard() {
         const result = await response.json()
         
         if (result.success) {
-          setCases(result.data.cases)
+          // Transform Prisma data to match expected dashboard structure
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const transformedCases = result.data.cases.map((caseItem: any) => ({
+            id: caseItem.id,
+            title: caseItem.title,
+            caseNumber: caseItem.caseNumber || caseItem.id,
+            status: caseItem.status.toLowerCase(), // Convert EXTRACTED to extracted
+            uploadedAt: new Date(caseItem.uploadedAt).toLocaleString(),
+            uploadedBy: caseItem.uploadedBy?.name || 'LAB Officer',
+            extractedData: {
+              husbandIncome: caseItem.husbandIncome || 0,
+              nafkahIddah: caseItem.nafkahIddah || 0,
+              mutaah: caseItem.mutaah || 0,
+              marriageDuration: caseItem.marriageDuration || 0,
+              confidence: caseItem.confidence || 0.85
+            },
+            extractedText: caseItem.extractedText || 'Document processed successfully.',
+            originalDocument: caseItem.fileName || 'uploaded_document.pdf',
+            pdfContent: {
+              fileName: caseItem.fileName || 'uploaded_document.pdf',
+              uploadDate: new Date(caseItem.uploadedAt),
+              fileSize: `${Math.round(caseItem.fileSize / 1024)} KB`,
+              pageCount: 1,
+              fullText: caseItem.extractedText || 'Document content extracted.',
+              keyExtracts: {
+                parties: ['Processing...', 'Processing...'],
+                courtDetails: `Syariah Court - Case No: ${caseItem.caseNumber || 'Processing...'}`,
+                financialInfo: [`Husband Income: $${caseItem.husbandIncome || 'Processing...'}`],
+                awards: [`Nafkah Iddah: $${caseItem.nafkahIddah || 'Processing...'} per month`]
+              }
+            }
+          }))
+          setCases(transformedCases)
         } else {
           console.error('Failed to fetch cases:', result.error)
           // Fall back to static data
