@@ -14,7 +14,6 @@
  */
 
 import { Buffer } from 'buffer'
-import pdfParse from 'pdf-parse'
 import { z } from 'zod'
 
 // Document Processing Types
@@ -113,6 +112,26 @@ const ExtractedDataSchema = z.object({
 /**
  * Advanced Document Processor with AI-powered extraction capabilities
  */
+type PdfParseFn = (dataBuffer: Buffer | Uint8Array, options?: unknown) => Promise<{
+  text: string
+  info?: unknown
+  metadata?: unknown
+  numpages?: number
+  numrender?: number
+}>
+
+let pdfParseLoader: Promise<PdfParseFn> | null = null
+
+const getPdfParse = async (): Promise<PdfParseFn> => {
+  if (!pdfParseLoader) {
+    pdfParseLoader = import('pdf-parse/lib/pdf-parse.js').then((mod) => {
+      const parseFn = (mod.default ?? mod) as PdfParseFn
+      return parseFn
+    })
+  }
+  return pdfParseLoader
+}
+
 export class DocumentProcessor {
   private ocrEngine: string
   private aiModel: string
@@ -263,7 +282,8 @@ export class DocumentProcessor {
     try {
       const arrayBuffer = await file.arrayBuffer()
       const buffer = Buffer.from(arrayBuffer)
-      const pdfData = await pdfParse(buffer)
+      const parsePdf = await getPdfParse()
+      const pdfData = await parsePdf(buffer)
       const extractedText = (pdfData.text || '').trim()
 
       if (extractedText.length > 0) {
