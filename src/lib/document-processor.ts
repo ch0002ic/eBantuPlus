@@ -51,6 +51,7 @@ export interface ExtractedData {
   wifeIncome?: number
   nafkahIddahAmount?: number
   mutaahAmount?: number
+  mutaahLumpSum?: number
   marriageDuration?: number
   
   // Document Classification
@@ -103,6 +104,7 @@ const ExtractedDataSchema = z.object({
   wifeIncome: z.number().min(0).optional(),
   nafkahIddahAmount: z.number().min(0).optional(),
   mutaahAmount: z.number().min(0).optional(),
+  mutaahLumpSum: z.number().min(0).optional(),
   marriageDuration: z.number().min(0).optional(),
   documentType: z.enum(['judgment', 'consent_order', 'application', 'affidavit']).optional(),
   isConsentOrder: z.boolean().optional(),
@@ -425,8 +427,34 @@ export class DocumentProcessor {
       return values
     }
 
-    const containsNegation = (input: string): boolean => {
+    const extractDurationInMonths = (input: string): number | undefined => {
+      let totalMonths = 0
+
+      const yearMatch = input.match(/(\d[\d,]*(?:\.\d+)?)\s*years?/i)
+      if (yearMatch?.[1]) {
+        const years = parseCurrency(yearMatch[1])
+        if (years !== undefined) {
+          totalMonths += years * 12
+        }
+      }
+
+      const monthMatch = input.match(/(\d[\d,]*(?:\.\d+)?)\s*months?/i)
+      if (monthMatch?.[1]) {
+        const months = parseCurrency(monthMatch[1])
+        if (months !== undefined) {
+          totalMonths += months
+        }
+      }
+
+      return totalMonths > 0 ? totalMonths : undefined
+    }
+
+    const containsAny = (input: string, phrases: string[]): boolean => {
       const lowered = input.toLowerCase()
+      return phrases.some(phrase => lowered.includes(phrase))
+    }
+
+    const containsNegation = (input: string): boolean => {
       const negationPhrases = [
         'no order',
         'no further',
@@ -438,7 +466,20 @@ export class DocumentProcessor {
         'there shall be no',
         'is not entitled'
       ]
-      return negationPhrases.some(phrase => lowered.includes(phrase))
+      return containsAny(input, negationPhrases)
+    }
+
+    const containsClaimLanguage = (input: string): boolean => {
+      const claimPhrases = [
+        'has claimed',
+        'is claiming',
+        'takes the position',
+        'proposed',
+        'seeks',
+        'asks for',
+        'invites the court'
+      ]
+      return containsAny(input, claimPhrases)
     }
 
     const isDecisionSentence = (input: string): boolean => {
@@ -456,17 +497,43 @@ export class DocumentProcessor {
         'the husband is to pay',
         'it is ordered',
         'there is no order',
-        'no order is made'
+        'no order is made',
+        'i allow',
+        'i have allowed',
+        'i allow the claim'
       ]
       return decisionKeywords.some(keyword => lowered.includes(keyword))
     }
 
-    const pickBestSentence = (keyword: string): string | null => {
-      const matching = sentences.filter(sentence => sentence.toLowerCase().includes(keyword))
+    const pickBestSentence = (
+      keyword: string,
+      scorer?: (sentence: string, index: number) => number
+    ): string | null => {
+      const matching = sentences
+        .map((sentence, index) => ({ sentence, index }))
+        .filter(entry => entry.sentence.toLowerCase().includes(keyword))
       if (matching.length === 0) return null
 
-      const decisionSentence = [...matching].reverse().find(sentence => isDecisionSentence(sentence))
-      return decisionSentence || matching[matching.length - 1]
+      const scoreFn = scorer ?? ((sentence: string, index: number) => {
+        let score = 0
+        if (isDecisionSentence(sentence) && !containsClaimLanguage(sentence)) score += 2
+        if (containsClaimLanguage(sentence)) score -= 1
+        return score + index * 0.0001 // slight bias to later sentences
+      })
+
+      let bestEntry = matching[matching.length - 1]
+      let bestScore = scoreFn(bestEntry.sentence, bestEntry.index)
+
+      for (let i = matching.length - 1; i >= 0; i--) {
+        const entry = matching[i]
+        const score = scoreFn(entry.sentence, entry.index)
+        if (score > bestScore || (score === bestScore && entry.index > bestEntry.index)) {
+          bestEntry = entry
+          bestScore = score
+        }
+      }
+
+      return bestEntry.sentence
     }
 
     const extractCaseNumber = (): string | undefined => {
@@ -484,6 +551,14 @@ export class DocumentProcessor {
       return citationMatch?.[0].trim()
     }
 
+    const findNextSentence = (sentence: string): string | null => {
+      const index = sentences.indexOf(sentence)
+      if (index >= 0 && index < sentences.length - 1) {
+        return sentences[index + 1]
+      }
+      return null
+    }
+
     const nafkahSentence = pickBestSentence('nafkah')
     let nafkahSource: 'claim' | 'order' | 'negated' | null = null
     if (nafkahSentence) {
@@ -493,8 +568,9 @@ export class DocumentProcessor {
       } else {
         const amounts = extractNumbers(nafkahSentence)
         if (amounts.length > 0) {
-          extractedData.nafkahIddahAmount = amounts[0]
-          nafkahSource = isDecisionSentence(nafkahSentence) ? 'order' : 'claim'
+          extractedData.nafkahIddahAmount = amounts[amounts.length - 1]
+          const isDecision = isDecisionSentence(nafkahSentence) && !containsClaimLanguage(nafkahSentence)
+          nafkahSource = isDecision ? 'order' : containsClaimLanguage(nafkahSentence) ? 'claim' : 'order'
         }
       }
     }
@@ -508,24 +584,74 @@ export class DocumentProcessor {
       } else {
         const amounts = extractNumbers(mutaahSentence)
         if (amounts.length > 0) {
-          // Prefer explicit day/month references
-          const lowerSentence = mutaahSentence.toLowerCase()
           const perDayMatch = mutaahSentence.match(/\$?([\d,]+(?:\.\d+)?)\s*(?:per\s+day|a\s+day)/i)
           const perMonthMatch = mutaahSentence.match(/\$?([\d,]+(?:\.\d+)?)\s*(?:per\s+month|monthly)/i)
+
+          const nextSentence = findNextSentence(mutaahSentence)
+          const combined = [mutaahSentence, nextSentence].filter(Boolean).join(' ')
+          let divisor: number | null = null
+
+          const explicitDaysMatch = combined.match(/(\d[\d,]*)\s*(?:days|day)/i)
+          if (explicitDaysMatch) {
+            divisor = parseInt(explicitDaysMatch[1].replace(/,/g, ''), 10)
+          } else {
+            const monthsFromCombined = extractDurationInMonths(combined)
+            if (monthsFromCombined !== undefined) {
+              divisor = Math.round(monthsFromCombined * 30)
+            }
+          }
+
+          if (!divisor) {
+            const durationSentence = [...sentences]
+              .reverse()
+              .find(sentence => /duration\s+of\s+(?:the\s+)?marriage/i.test(sentence) && /years?|months?/i.test(sentence))
+              ?? sentences.find(sentence => /duration\s+of\s+(?:the\s+)?marriage/i.test(sentence))
+            if (durationSentence) {
+              const monthsFromDurationSentence = extractDurationInMonths(durationSentence)
+              if (monthsFromDurationSentence !== undefined) {
+                divisor = Math.round(monthsFromDurationSentence * 30)
+              }
+            }
+          }
+
+          const lumpSumCandidate = Math.max(...amounts)
+          const derivedPerDay = divisor && divisor > 0
+            ? Number((lumpSumCandidate / divisor).toFixed(2))
+            : undefined
+
           if (perDayMatch) {
-            extractedData.mutaahAmount = parseCurrency(perDayMatch[1])
+            const directPerDay = parseCurrency(perDayMatch[1])
+            extractedData.mutaahAmount = derivedPerDay ?? directPerDay
           } else if (perMonthMatch) {
             extractedData.mutaahAmount = parseCurrency(perMonthMatch[1])
-          } else {
-            // Fall back to the smallest amount mentioned to avoid lump-sum confusion
-            extractedData.mutaahAmount = amounts.sort((a, b) => a - b)[0]
+          } else if (lumpSumCandidate > 0) {
+            if (derivedPerDay !== undefined) {
+              extractedData.mutaahAmount = derivedPerDay
+            } else {
+              extractedData.mutaahAmount = Number((lumpSumCandidate / 180).toFixed(2))
+            }
           }
-          mutaahSource = isDecisionSentence(lowerSentence) ? 'order' : 'claim'
+
+          if (lumpSumCandidate > 100) {
+            extractedData.mutaahLumpSum = lumpSumCandidate
+          }
+
+          const isDecision = isDecisionSentence(mutaahSentence) && !containsClaimLanguage(mutaahSentence)
+          mutaahSource = isDecision ? 'order' : containsClaimLanguage(mutaahSentence) ? 'claim' : 'order'
         }
       }
     }
 
-    const incomeSentence = pickBestSentence('income')
+    const incomeSentence = pickBestSentence('income', (sentence) => {
+      let score = 0
+      const lowered = sentence.toLowerCase()
+      if (lowered.includes('per month')) score += 3
+      if (lowered.includes('per annum') || lowered.includes('per year') || lowered.includes('annual')) score += 2
+      if (lowered.includes('notice of assessment')) score += 1
+      if (isDecisionSentence(sentence)) score += 1
+      if (containsClaimLanguage(sentence)) score -= 2
+      return score
+    })
     let incomeSource: 'claim' | 'order' | null = null
     if (incomeSentence) {
       const amounts = extractNumbers(incomeSentence)
@@ -534,27 +660,35 @@ export class DocumentProcessor {
         const monthlyMatch = incomeSentence.match(/\$?([\d,]+(?:\.\d+)?)\s*(?:per\s+month|monthly)/i)
         const annualMatch = incomeSentence.match(/\$?([\d,]+(?:\.\d+)?)\s*(?:per\s+year|per\s+annum|annual|a\s+year)/i)
 
+        const decisionScore = isDecisionSentence(incomeSentence) ? 2 : 0
+        const claimPenalty = containsClaimLanguage(incomeSentence) ? -1 : 0
+        const baseScore = decisionScore + claimPenalty
+
+        let candidateIncome: number | undefined
         if (monthlyMatch) {
-          extractedData.husbandIncome = parseCurrency(monthlyMatch[1])
+          candidateIncome = parseCurrency(monthlyMatch[1])
         } else if (annualMatch) {
           const annual = parseCurrency(annualMatch[1])
           if (annual !== undefined) {
-            extractedData.husbandIncome = Number((annual / 12).toFixed(2))
+            candidateIncome = Number((annual / 12).toFixed(2))
           }
         } else {
-          // Take the final amount mentioned, assuming it summarises the findings
-          extractedData.husbandIncome = amounts[amounts.length - 1]
+          candidateIncome = Math.max(...amounts)
         }
 
-        incomeSource = isDecisionSentence(lowerSentence) ? 'order' : 'claim'
+        if (candidateIncome !== undefined) {
+          extractedData.husbandIncome = candidateIncome
+        }
+
+        incomeSource = baseScore > 0 ? 'order' : 'claim'
       }
     }
 
-    const marriageDurationMatch = normalisedText.match(/duration\s+of\s+marriage[^\d]{0,40}([\d.]+)\s*(?:years?|yrs?)/i)
-    if (marriageDurationMatch?.[1]) {
-      const durationValue = parseFloat(marriageDurationMatch[1])
-      if (Number.isFinite(durationValue)) {
-        extractedData.marriageDuration = Math.round(durationValue * 12)
+  const durationContextMatch = normalisedText.match(/duration\s+of\s+(?:the\s+)?marriage[^\.]{0,120}/i)
+    if (durationContextMatch) {
+      const months = extractDurationInMonths(durationContextMatch[0])
+      if (months !== undefined) {
+        extractedData.marriageDuration = Math.round(months)
       }
     }
 
@@ -590,17 +724,17 @@ export class DocumentProcessor {
       extractedData.marriageDuration
     ].filter((value) => value !== undefined && value !== null).length
 
-    let confidence = 0.5 + extractedFieldCount * 0.1
+    let confidence = 0.55 + extractedFieldCount * 0.08
 
-    if (nafkahSource === 'claim' || mutaahSource === 'claim' || incomeSource === 'claim') {
-      confidence -= 0.1
+    const sources = [nafkahSource, mutaahSource, incomeSource]
+    if (sources.some(source => source === 'claim')) {
+      confidence -= 0.12
     }
-
-    if (nafkahSource === 'negated' || mutaahSource === 'negated') {
+    if (sources.some(source => source === 'negated')) {
       confidence -= 0.05
     }
 
-    confidence = Math.max(0.3, Math.min(0.95, confidence))
+    confidence = Math.max(0.3, Math.min(0.93, confidence))
 
     return { data: extractedData, confidence }
   }
