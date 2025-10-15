@@ -401,110 +401,155 @@ export class DocumentProcessor {
     const extractedData: Partial<ExtractedData> = {}
     const normalisedText = text.replace(/\s+/g, ' ')
     const lowerText = normalisedText.toLowerCase()
+    const sentences = normalisedText
+      .split(/(?<=[\.\?!])\s+(?=[A-Z\[])|\n+/)
+      .map(sentence => sentence.trim())
+      .filter(Boolean)
 
     const parseCurrency = (value: string): number | undefined => {
       const numeric = parseFloat(value.replace(/[$,\s]/g, ''))
       return Number.isFinite(numeric) ? numeric : undefined
     }
 
-    const matchWithPatterns = (
-      patterns: RegExp[],
-      handler: (match: RegExpMatchArray) => number | undefined
-    ): number | undefined => {
-      for (const pattern of patterns) {
-        const match = normalisedText.match(pattern)
-        if (match) {
-          const result = handler(match)
-          if (result !== undefined) {
-            return result
+    const extractNumbers = (input: string): number[] => {
+      const values: number[] = []
+      const matches = input.match(/\$?\d[\d,]*(?:\.\d+)?/g)
+      if (matches) {
+        for (const match of matches) {
+          const parsed = parseCurrency(match)
+          if (parsed !== undefined) {
+            values.push(parsed)
           }
         }
       }
-      return undefined
+      return values
     }
 
-    // Extract case number or citation
-    const casePatterns = [
-      /originating\s+summons\s+no\s+([A-Za-z0-9\/-]+)/i,
-      /case\s+(?:no|number)\s*[:#]?\s*([A-Za-z0-9\/-]+)/i
-    ]
-    for (const pattern of casePatterns) {
-      const match = normalisedText.match(pattern)
-      if (match?.[1]) {
-        extractedData.caseNumber = match[1].trim()
-        break
+    const containsNegation = (input: string): boolean => {
+      const lowered = input.toLowerCase()
+      const negationPhrases = [
+        'no order',
+        'no further',
+        'nil payable',
+        'not payable',
+        'not awarded',
+        'no nafkah',
+        'no mutaah',
+        'there shall be no',
+        'is not entitled'
+      ]
+      return negationPhrases.some(phrase => lowered.includes(phrase))
+    }
+
+    const isDecisionSentence = (input: string): boolean => {
+      const lowered = input.toLowerCase()
+      const decisionKeywords = [
+        'i order',
+        'i have ordered',
+        'i have awarded',
+        'i award',
+        'i have accepted',
+        'the court orders',
+        'the court hereby orders',
+        'the court has ordered',
+        'the wife is entitled',
+        'the husband is to pay',
+        'it is ordered',
+        'there is no order',
+        'no order is made'
+      ]
+      return decisionKeywords.some(keyword => lowered.includes(keyword))
+    }
+
+    const pickBestSentence = (keyword: string): string | null => {
+      const matching = sentences.filter(sentence => sentence.toLowerCase().includes(keyword))
+      if (matching.length === 0) return null
+
+      const decisionSentence = [...matching].reverse().find(sentence => isDecisionSentence(sentence))
+      return decisionSentence || matching[matching.length - 1]
+    }
+
+    const extractCaseNumber = (): string | undefined => {
+      const casePatterns = [
+        /originating\s+summons\s+no\s+([A-Za-z0-9\/-]+)/i,
+        /case\s+(?:no|number)\s*[:#]?\s*([A-Za-z0-9\/-]+)/i
+      ]
+      for (const pattern of casePatterns) {
+        const match = normalisedText.match(pattern)
+        if (match?.[1]) {
+          return match[1].trim()
+        }
       }
-    }
-
-    if (!extractedData.caseNumber) {
       const citationMatch = normalisedText.match(/\[\d{4}\]\s+SGSYC\s+\d+/i)
-      if (citationMatch) {
-        extractedData.caseNumber = citationMatch[0].trim()
+      return citationMatch?.[0].trim()
+    }
+
+    const nafkahSentence = pickBestSentence('nafkah')
+    let nafkahSource: 'claim' | 'order' | 'negated' | null = null
+    if (nafkahSentence) {
+      if (containsNegation(nafkahSentence)) {
+        extractedData.nafkahIddahAmount = 0
+        nafkahSource = 'negated'
+      } else {
+        const amounts = extractNumbers(nafkahSentence)
+        if (amounts.length > 0) {
+          extractedData.nafkahIddahAmount = amounts[0]
+          nafkahSource = isDecisionSentence(nafkahSentence) ? 'order' : 'claim'
+        }
       }
     }
 
-    // Extract nafkah iddah monthly amount
-    const nafkahAmount = matchWithPatterns([
-      /nafkah\s+iddah[^$]{0,120}\$\s*([\d,.]+(?:\.\d{2})?)/i,
-      /nafkah\s+iddah[^\d]{0,80}([\d,.]+(?:\.\d{2})?)/i
-    ], (match) => parseCurrency(match[1]))
-
-    if (nafkahAmount !== undefined) {
-      extractedData.nafkahIddahAmount = nafkahAmount
-    }
-
-    // Extract mutaah daily amount. Prefer per-day references, otherwise derive average per day from lump sum by dividing by 30.
-    let mutaahAmount = matchWithPatterns([
-      /mutaah[^$]{0,120}\$\s*([\d,.]+(?:\.\d{2})?)\s*(?:per\s+day|a\s+day)/i,
-      /mutaah[^$]{0,120}\$\s*([\d,.]+(?:\.\d{2})?)\s*(?:per\s+month|monthly)/i
-    ], (match) => parseCurrency(match[1]))
-
-    if (mutaahAmount === undefined) {
-      const lumpSum = matchWithPatterns([
-        /mutaah[^$]{0,160}\$\s*([\d,.]+(?:\.\d{2})?)/i
-      ], (match) => parseCurrency(match[1]))
-
-      if (lumpSum !== undefined) {
-        // Approximate to daily value over 180 days if no explicit period provided
-        mutaahAmount = Number((lumpSum / 180).toFixed(2))
+    const mutaahSentence = pickBestSentence('mutaah')
+    let mutaahSource: 'claim' | 'order' | 'negated' | null = null
+    if (mutaahSentence) {
+      if (containsNegation(mutaahSentence)) {
+        extractedData.mutaahAmount = 0
+        mutaahSource = 'negated'
+      } else {
+        const amounts = extractNumbers(mutaahSentence)
+        if (amounts.length > 0) {
+          // Prefer explicit day/month references
+          const lowerSentence = mutaahSentence.toLowerCase()
+          const perDayMatch = mutaahSentence.match(/\$?([\d,]+(?:\.\d+)?)\s*(?:per\s+day|a\s+day)/i)
+          const perMonthMatch = mutaahSentence.match(/\$?([\d,]+(?:\.\d+)?)\s*(?:per\s+month|monthly)/i)
+          if (perDayMatch) {
+            extractedData.mutaahAmount = parseCurrency(perDayMatch[1])
+          } else if (perMonthMatch) {
+            extractedData.mutaahAmount = parseCurrency(perMonthMatch[1])
+          } else {
+            // Fall back to the smallest amount mentioned to avoid lump-sum confusion
+            extractedData.mutaahAmount = amounts.sort((a, b) => a - b)[0]
+          }
+          mutaahSource = isDecisionSentence(lowerSentence) ? 'order' : 'claim'
+        }
       }
     }
 
-    if (mutaahAmount !== undefined) {
-      extractedData.mutaahAmount = mutaahAmount
-    }
+    const incomeSentence = pickBestSentence('income')
+    let incomeSource: 'claim' | 'order' | null = null
+    if (incomeSentence) {
+      const amounts = extractNumbers(incomeSentence)
+      if (amounts.length > 0) {
+        const lowerSentence = incomeSentence.toLowerCase()
+        const monthlyMatch = incomeSentence.match(/\$?([\d,]+(?:\.\d+)?)\s*(?:per\s+month|monthly)/i)
+        const annualMatch = incomeSentence.match(/\$?([\d,]+(?:\.\d+)?)\s*(?:per\s+year|per\s+annum|annual|a\s+year)/i)
 
-    // Extract husband income (prefer explicit monthly references)
-    let husbandIncome = matchWithPatterns([
-      /husband[^$]{0,160}\$\s*([\d,.]+(?:\.\d{2})?)\s*(?:per\s+month|monthly)/i,
-      /plaintiff[^$]{0,160}\$\s*([\d,.]+(?:\.\d{2})?)\s*(?:per\s+month|monthly)/i,
-      /income[^$]{0,80}\$\s*([\d,.]+(?:\.\d{2})?)\s*(?:per\s+month|monthly)/i
-    ], (match) => parseCurrency(match[1]))
+        if (monthlyMatch) {
+          extractedData.husbandIncome = parseCurrency(monthlyMatch[1])
+        } else if (annualMatch) {
+          const annual = parseCurrency(annualMatch[1])
+          if (annual !== undefined) {
+            extractedData.husbandIncome = Number((annual / 12).toFixed(2))
+          }
+        } else {
+          // Take the final amount mentioned, assuming it summarises the findings
+          extractedData.husbandIncome = amounts[amounts.length - 1]
+        }
 
-    if (husbandIncome === undefined) {
-      // Handle annual income statements
-      const annualIncome = matchWithPatterns([
-        /husband[^$]{0,160}\$\s*([\d,.]+(?:\.\d{2})?)\s*(?:per\s+year|annual|a\s+year)/i,
-        /income[^$]{0,80}\$\s*([\d,.]+(?:\.\d{2})?)\s*(?:per\s+year|annual|a\s+year)/i
-      ], (match) => parseCurrency(match[1]))
-
-      if (annualIncome !== undefined) {
-        husbandIncome = Number((annualIncome / 12).toFixed(2))
+        incomeSource = isDecisionSentence(lowerSentence) ? 'order' : 'claim'
       }
     }
 
-    if (husbandIncome === undefined) {
-      // Check for statements like "about $3,183.00 per month"
-      husbandIncome = matchWithPatterns([
-        /about\s+\$\s*([\d,.]+(?:\.\d{2})?)\s*per\s+month/i
-      ], (match) => parseCurrency(match[1]))
-    }
-
-    if (husbandIncome !== undefined) {
-      extractedData.husbandIncome = husbandIncome
-    }
-
-    // Extract marriage duration when explicitly stated
     const marriageDurationMatch = normalisedText.match(/duration\s+of\s+marriage[^\d]{0,40}([\d.]+)\s*(?:years?|yrs?)/i)
     if (marriageDurationMatch?.[1]) {
       const durationValue = parseFloat(marriageDurationMatch[1])
@@ -513,23 +558,28 @@ export class DocumentProcessor {
       }
     }
 
-    // Detect consent order
-    extractedData.isConsentOrder = /consent\s+order|parties\s+agree|by\s+consent/i.test(lowerText)
+    extractedData.caseNumber = extractCaseNumber()
 
-    // Document type classification
+    const consentDecision = sentences.some(sentence => {
+      if (!/consent\s+order/i.test(sentence)) return false
+      const lowered = sentence.toLowerCase()
+      if (containsNegation(lowered)) return false
+      return /is recorded|is entered into|parties have entered|by consent|made by consent/.test(lowered)
+    })
+    extractedData.isConsentOrder = consentDecision
+
     if (/judgment|voluntary\s+ex\s+tempore/i.test(lowerText)) {
       extractedData.documentType = 'judgment'
-    } else if (/consent\s+order/i.test(lowerText)) {
+    } else if (consentDecision) {
       extractedData.documentType = 'consent_order'
     } else if (/application|summons/i.test(lowerText)) {
       extractedData.documentType = 'application'
     }
 
-    // Check if contains financial data
     extractedData.containsFinancialData = Boolean(
-      extractedData.husbandIncome ||
-      extractedData.nafkahIddahAmount ||
-      extractedData.mutaahAmount
+      extractedData.husbandIncome !== undefined ||
+      extractedData.nafkahIddahAmount !== undefined ||
+      extractedData.mutaahAmount !== undefined
     )
 
     const extractedFieldCount = [
@@ -540,7 +590,17 @@ export class DocumentProcessor {
       extractedData.marriageDuration
     ].filter((value) => value !== undefined && value !== null).length
 
-    const confidence = Math.min(0.95, 0.6 + extractedFieldCount * 0.08)
+    let confidence = 0.5 + extractedFieldCount * 0.1
+
+    if (nafkahSource === 'claim' || mutaahSource === 'claim' || incomeSource === 'claim') {
+      confidence -= 0.1
+    }
+
+    if (nafkahSource === 'negated' || mutaahSource === 'negated') {
+      confidence -= 0.05
+    }
+
+    confidence = Math.max(0.3, Math.min(0.95, confidence))
 
     return { data: extractedData, confidence }
   }
