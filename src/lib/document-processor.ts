@@ -13,6 +13,8 @@
  * - Automated validation workflows
  */
 
+import { Buffer } from 'buffer'
+import pdfParse from 'pdf-parse'
 import { z } from 'zod'
 
 // Document Processing Types
@@ -259,45 +261,24 @@ export class DocumentProcessor {
    */
   private async extractFromPDF(file: File, enableOCR = true): Promise<string> {
     try {
-      // For hackathon demo: Simulate PDF text extraction
-      // Production implementation would use pdf-parse or PDF.js libraries
-      const simulatedContent = `
-        SYARIAH COURT OF SINGAPORE
-        Case No: SYC2024/1234
-        
-        In the matter of:
-        Abdul Rahman bin Ahmad (IC: S1234567A) - Applicant
-        AND
-        Siti Fatimah bte Mohamed (IC: S2345678B) - Respondent
-        
-        ORDER ON ANCILLARY MATTERS
-        
-        BEFORE: His Honour Judge Ahmad bin Ali
-        Date: 15 March 2024
-        
-        UPON the application for ancillary matters following the pronouncement of talaq
-        AND UPON hearing counsel for both parties
-        
-        IT IS HEREBY ORDERED THAT:
-        
-        1. The Applicant shall pay to the Respondent:
-           a) Nafkah Iddah: $439.00 per month for 3 months
-           b) Mutaah: $2.69
-           
-        2. The said amounts are based on the Applicant's declared monthly income of $2,800.00
-        
-        3. Marriage Duration: 8.5 years (from 15 July 2015 to 20 January 2024)
-        
-        GIVEN under my hand this 15th day of March 2024
-        
-        Judge Ahmad bin Ali
-        Syariah Court of Singapore
-      `
-      
-      return simulatedContent.trim()
-    } catch (error) {
+      const arrayBuffer = await file.arrayBuffer()
+      const buffer = Buffer.from(arrayBuffer)
+      const pdfData = await pdfParse(buffer)
+      const extractedText = (pdfData.text || '').trim()
+
+      if (extractedText.length > 0) {
+        return extractedText
+      }
+
       if (enableOCR) {
-        console.log('PDF text extraction failed, falling back to OCR')
+        console.warn(`Empty PDF text extracted from ${file.name}, falling back to OCR`)
+        return await this.performOCR(file)
+      }
+
+      return ''
+    } catch (error) {
+      console.error('PDF extraction failed, attempting OCR fallback', error)
+      if (enableOCR) {
         return await this.performOCR(file)
       }
       throw error
@@ -397,58 +378,149 @@ export class DocumentProcessor {
     data: Partial<ExtractedData>
     confidence: number
   }> {
-    // Simulate AI extraction using pattern matching
     const extractedData: Partial<ExtractedData> = {}
-    const confidence = 0.8
+    const normalisedText = text.replace(/\s+/g, ' ')
+    const lowerText = normalisedText.toLowerCase()
 
-    // Extract case number
-    const caseNumberMatch = text.match(/(?:case|no)[:\s]+([A-Z]{2,3}\d{4}\/\d{3,4})/i)
-    if (caseNumberMatch) {
-      extractedData.caseNumber = caseNumberMatch[1]
+    const parseCurrency = (value: string): number | undefined => {
+      const numeric = parseFloat(value.replace(/[$,\s]/g, ''))
+      return Number.isFinite(numeric) ? numeric : undefined
     }
 
-    // Extract income
-    const incomeMatch = text.match(/income[:\s]+\$?([\d,]+(?:\.\d{2})?)/i)
-    if (incomeMatch) {
-      extractedData.husbandIncome = parseFloat(incomeMatch[1].replace(/,/g, ''))
+    const matchWithPatterns = (
+      patterns: RegExp[],
+      handler: (match: RegExpMatchArray) => number | undefined
+    ): number | undefined => {
+      for (const pattern of patterns) {
+        const match = normalisedText.match(pattern)
+        if (match) {
+          const result = handler(match)
+          if (result !== undefined) {
+            return result
+          }
+        }
+      }
+      return undefined
     }
 
-    // Extract nafkah iddah
-    const nafkahMatch = text.match(/nafkah\s+iddah[:\s]+\$?([\d,]+(?:\.\d{2})?)/i)
-    if (nafkahMatch) {
-      extractedData.nafkahIddahAmount = parseFloat(nafkahMatch[1].replace(/,/g, ''))
+    // Extract case number or citation
+    const casePatterns = [
+      /originating\s+summons\s+no\s+([A-Za-z0-9\/-]+)/i,
+      /case\s+(?:no|number)\s*[:#]?\s*([A-Za-z0-9\/-]+)/i
+    ]
+    for (const pattern of casePatterns) {
+      const match = normalisedText.match(pattern)
+      if (match?.[1]) {
+        extractedData.caseNumber = match[1].trim()
+        break
+      }
     }
 
-    // Extract mutaah
-    const mutaahMatch = text.match(/mutaah[:\s]+\$?([\d,]+(?:\.\d{2})?)/i)
-    if (mutaahMatch) {
-      extractedData.mutaahAmount = parseFloat(mutaahMatch[1].replace(/,/g, ''))
+    if (!extractedData.caseNumber) {
+      const citationMatch = normalisedText.match(/\[\d{4}\]\s+SGSYC\s+\d+/i)
+      if (citationMatch) {
+        extractedData.caseNumber = citationMatch[0].trim()
+      }
     }
 
-    // Extract marriage duration
-    const durationMatch = text.match(/marriage\s+duration[:\s]+([\d.]+)\s*years?/i)
-    if (durationMatch) {
-      extractedData.marriageDuration = parseFloat(durationMatch[1])
+    // Extract nafkah iddah monthly amount
+    const nafkahAmount = matchWithPatterns([
+      /nafkah\s+iddah[^$]{0,120}\$\s*([\d,.]+(?:\.\d{2})?)/i,
+      /nafkah\s+iddah[^\d]{0,80}([\d,.]+(?:\.\d{2})?)/i
+    ], (match) => parseCurrency(match[1]))
+
+    if (nafkahAmount !== undefined) {
+      extractedData.nafkahIddahAmount = nafkahAmount
+    }
+
+    // Extract mutaah daily amount. Prefer per-day references, otherwise derive average per day from lump sum by dividing by 30.
+    let mutaahAmount = matchWithPatterns([
+      /mutaah[^$]{0,120}\$\s*([\d,.]+(?:\.\d{2})?)\s*(?:per\s+day|a\s+day)/i,
+      /mutaah[^$]{0,120}\$\s*([\d,.]+(?:\.\d{2})?)\s*(?:per\s+month|monthly)/i
+    ], (match) => parseCurrency(match[1]))
+
+    if (mutaahAmount === undefined) {
+      const lumpSum = matchWithPatterns([
+        /mutaah[^$]{0,160}\$\s*([\d,.]+(?:\.\d{2})?)/i
+      ], (match) => parseCurrency(match[1]))
+
+      if (lumpSum !== undefined) {
+        // Approximate to daily value over 180 days if no explicit period provided
+        mutaahAmount = Number((lumpSum / 180).toFixed(2))
+      }
+    }
+
+    if (mutaahAmount !== undefined) {
+      extractedData.mutaahAmount = mutaahAmount
+    }
+
+    // Extract husband income (prefer explicit monthly references)
+    let husbandIncome = matchWithPatterns([
+      /husband[^$]{0,160}\$\s*([\d,.]+(?:\.\d{2})?)\s*(?:per\s+month|monthly)/i,
+      /plaintiff[^$]{0,160}\$\s*([\d,.]+(?:\.\d{2})?)\s*(?:per\s+month|monthly)/i,
+      /income[^$]{0,80}\$\s*([\d,.]+(?:\.\d{2})?)\s*(?:per\s+month|monthly)/i
+    ], (match) => parseCurrency(match[1]))
+
+    if (husbandIncome === undefined) {
+      // Handle annual income statements
+      const annualIncome = matchWithPatterns([
+        /husband[^$]{0,160}\$\s*([\d,.]+(?:\.\d{2})?)\s*(?:per\s+year|annual|a\s+year)/i,
+        /income[^$]{0,80}\$\s*([\d,.]+(?:\.\d{2})?)\s*(?:per\s+year|annual|a\s+year)/i
+      ], (match) => parseCurrency(match[1]))
+
+      if (annualIncome !== undefined) {
+        husbandIncome = Number((annualIncome / 12).toFixed(2))
+      }
+    }
+
+    if (husbandIncome === undefined) {
+      // Check for statements like "about $3,183.00 per month"
+      husbandIncome = matchWithPatterns([
+        /about\s+\$\s*([\d,.]+(?:\.\d{2})?)\s*per\s+month/i
+      ], (match) => parseCurrency(match[1]))
+    }
+
+    if (husbandIncome !== undefined) {
+      extractedData.husbandIncome = husbandIncome
+    }
+
+    // Extract marriage duration when explicitly stated
+    const marriageDurationMatch = normalisedText.match(/duration\s+of\s+marriage[^\d]{0,40}([\d.]+)\s*(?:years?|yrs?)/i)
+    if (marriageDurationMatch?.[1]) {
+      const durationValue = parseFloat(marriageDurationMatch[1])
+      if (Number.isFinite(durationValue)) {
+        extractedData.marriageDuration = Math.round(durationValue * 12)
+      }
     }
 
     // Detect consent order
-    extractedData.isConsentOrder = /consent|agreed|parties\s+agree/i.test(text)
-    
+    extractedData.isConsentOrder = /consent\s+order|parties\s+agree|by\s+consent/i.test(lowerText)
+
     // Document type classification
-    if (/judgment|it is hereby ordered/i.test(text)) {
+    if (/judgment|voluntary\s+ex\s+tempore/i.test(lowerText)) {
       extractedData.documentType = 'judgment'
-    } else if (/consent|agreed/i.test(text)) {
+    } else if (/consent\s+order/i.test(lowerText)) {
       extractedData.documentType = 'consent_order'
-    } else if (/application|prayers/i.test(text)) {
+    } else if (/application|summons/i.test(lowerText)) {
       extractedData.documentType = 'application'
     }
 
     // Check if contains financial data
-    extractedData.containsFinancialData = !!(
-      extractedData.husbandIncome || 
-      extractedData.nafkahIddahAmount || 
+    extractedData.containsFinancialData = Boolean(
+      extractedData.husbandIncome ||
+      extractedData.nafkahIddahAmount ||
       extractedData.mutaahAmount
     )
+
+    const extractedFieldCount = [
+      extractedData.husbandIncome,
+      extractedData.nafkahIddahAmount,
+      extractedData.mutaahAmount,
+      extractedData.caseNumber,
+      extractedData.marriageDuration
+    ].filter((value) => value !== undefined && value !== null).length
+
+    const confidence = Math.min(0.95, 0.6 + extractedFieldCount * 0.08)
 
     return { data: extractedData, confidence }
   }
